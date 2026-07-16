@@ -1,10 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import logging
 
 from models.schemas import UploadResponse
 from parsers.xlsx_parser import parse_xlsx
 from processors.tabular_processor import process_dataframe
+
+# Suppress harmless pdfminer warnings about fonts
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 # Load environment variables (NVIDIA_API_KEY)
 load_dotenv()
