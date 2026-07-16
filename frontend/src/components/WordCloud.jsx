@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactWordcloud from 'react-wordcloud';
 import { BarChart2 } from 'lucide-react';
+import ErrorBoundary from './ErrorBoundary';
 import './WordCloud.css';
 
 const WordCloud = ({ keywords }) => {
@@ -34,7 +35,9 @@ const WordCloud = ({ keywords }) => {
       
       <div className="wordcloud-wrapper">
         {wordCloudData.length > 0 ? (
-          <ReactWordcloud words={wordCloudData} options={wordCloudOptions} />
+          <ErrorBoundary>
+            <ReactWordcloud words={wordCloudData} options={wordCloudOptions} size={[500, 300]} />
+          </ErrorBoundary>
         ) : (
           <div className="no-keywords">No keywords found.</div>
         )}
