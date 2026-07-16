@@ -1,30 +1,11 @@
 import React from 'react';
-import ReactWordcloud from 'react-wordcloud';
 import { BarChart2 } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 import './WordCloud.css';
 
 const WordCloud = ({ keywords }) => {
-  const wordCloudData = keywords.map(kw => ({
-    text: kw.word,
-    value: kw.score * 100
-  }));
-
-  const wordCloudOptions = {
-    colors: ['#818cf8', '#6366f1', '#4f46e5', '#a855f7', '#d8b4fe'],
-    enableTooltip: true,
-    deterministic: false,
-    fontFamily: 'Inter, sans-serif',
-    fontSizes: [20, 60],
-    fontStyle: 'normal',
-    fontWeight: 'bold',
-    padding: 1,
-    rotations: 3,
-    rotationAngles: [0, 90],
-    scale: 'sqrt',
-    spiral: 'archimedean',
-    transitionDuration: 1000
-  };
+  // Vibrant colors for the custom cloud
+  const colors = ['#818cf8', '#6366f1', '#4f46e5', '#a855f7', '#d8b4fe', '#c084fc', '#8b5cf6'];
 
   return (
     <div className="wordcloud-section glass-panel">
@@ -33,15 +14,36 @@ const WordCloud = ({ keywords }) => {
         <h3>Keyword Analysis</h3>
       </div>
       
-      <div className="wordcloud-wrapper">
-        {wordCloudData.length > 0 ? (
-          <ErrorBoundary>
-            <ReactWordcloud words={wordCloudData} options={wordCloudOptions} size={[500, 300]} />
-          </ErrorBoundary>
-        ) : (
-          <div className="no-keywords">No keywords found.</div>
-        )}
-      </div>
+      <ErrorBoundary>
+        <div className="wordcloud-wrapper custom-cloud">
+          {keywords.length > 0 ? (
+            keywords.map((kw, idx) => {
+              // Scale score (0.0 to 1.0) to font size (16px to 64px)
+              const fontSize = 16 + (kw.score * 48);
+              const color = colors[idx % colors.length];
+              
+              return (
+                <span 
+                  key={idx} 
+                  style={{
+                    fontSize: `${fontSize}px`,
+                    color: color,
+                    padding: '8px',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    opacity: 0.8 + (kw.score * 0.2)
+                  }}
+                  className="cloud-word"
+                >
+                  {kw.word}
+                </span>
+              );
+            })
+          ) : (
+            <div className="no-keywords">No keywords found.</div>
+          )}
+        </div>
+      </ErrorBoundary>
       
       <div className="keyword-tags">
         {keywords.slice(0, 10).map((kw, idx) => (
