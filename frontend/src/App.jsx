@@ -1,12 +1,34 @@
 import React from 'react';
-import { Activity } from 'lucide-react';
+import { Activity, Loader2, AlertCircle } from 'lucide-react';
+import axios from 'axios';
 import FileUpload from './components/FileUpload';
 import './App.css';
 
 function App() {
-  const handleFileSelect = (file) => {
-    console.log("File selected:", file);
-    // TODO: Upload to backend in Commit 9
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [data, setData] = React.useState(null);
+
+  const handleFileSelect = async (file) => {
+    setIsLoading(true);
+    setError(null);
+    setData(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await axios.post("http://localhost:8000/api/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      console.log("Success:", response.data);
+      setData(response.data);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || err.message || "An error occurred during upload.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -25,9 +47,37 @@ function App() {
       {/* Main Content Area */}
       <main className="main-content animate-fade-in">
         <div className="placeholder-hero">
-          <h2>Upload a File to Begin</h2>
-          <p>We support .xlsx, .pdf, and .docx up to 15MB.</p>
-          <FileUpload onFileSelect={handleFileSelect} />
+          {!isLoading && !data && (
+            <>
+              <h2>Upload a File to Begin</h2>
+              <p>We support .xlsx, .pdf, and .docx up to 15MB.</p>
+              <FileUpload onFileSelect={handleFileSelect} />
+            </>
+          )}
+
+          {isLoading && (
+            <div className="loading-state flex-col-center">
+              <Loader2 className="animate-spin" size={48} color="var(--accent-color)" />
+              <h3 style={{ marginTop: '16px' }}>Processing File...</h3>
+              <p style={{ color: 'var(--text-secondary)' }}>Extracting data and running AI models.</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="error-toast">
+              <AlertCircle size={20} />
+              <span>{error}</span>
+              <button onClick={() => setError(null)}>Try Again</button>
+            </div>
+          )}
+
+          {data && (
+            <div className="success-state">
+              <h3>Upload Successful!</h3>
+              <p>Data category: {data.data_category}</p>
+              {/* Dashboard will be rendered here in Phase 4 */}
+            </div>
+          )}
         </div>
       </main>
     </div>
