@@ -2,8 +2,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 openpyxl
-pdfplumber
-python-docx
+pypdf
 openai
 python-dotenv
 pydantic
