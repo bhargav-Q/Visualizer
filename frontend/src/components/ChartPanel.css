@@ -1,0 +1,21 @@
+.chart-container {
+  padding: 24px;
+}
+
+.chart-container h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 24px;
+  color: var(--text-secondary);
+}
+
+.chart-wrapper {
+  margin-left: -20px;
+}
+
+.chart-tooltip {
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  background: var(--bg-dark) !important;
+  border-color: var(--accent-color) !important;
+}
