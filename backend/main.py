@@ -27,7 +27,13 @@ async def upload_file(file: UploadFile = File(...)):
         
     filename = file.filename.lower()
     
-    # Optional: File size check (15MB) - typically handled by web server, but we can check here.
+    # File size check (15MB)
+    file.file.seek(0, 2) # seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)    # reset to start
+    
+    if file_size > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 15MB.")
     
     if filename.endswith(".xlsx"):
         try:
