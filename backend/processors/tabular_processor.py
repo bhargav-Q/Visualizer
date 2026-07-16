@@ -1,10 +1,11 @@
-import pandas as pd
-import numpy as np
 from models.schemas import (
     TabularResult, ColumnInfo, NumericSummary, CategoricalSummary, ValueCount, ChartData
 )
 
-def process_dataframe(df: pd.DataFrame) -> TabularResult:
+def process_dataframe(df) -> TabularResult:
+    import pandas as pd
+    import numpy as np
+    
     # 1. Dimensions
     row_count, col_count = df.shape
     

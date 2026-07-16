@@ -1,8 +1,8 @@
-import pandas as pd
 from fastapi import UploadFile
 import io
 
-def parse_xlsx(file: UploadFile) -> pd.DataFrame:
+def parse_xlsx(file: UploadFile):
+    import pandas as pd
     """
     Reads an uploaded .xlsx file and returns a Pandas DataFrame.
     """
