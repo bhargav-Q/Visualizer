@@ -5,7 +5,7 @@ import logging
 
 from models.schemas import UploadResponse
 from parsers.xlsx_parser import parse_xlsx
-from processors.tabular_processor import process_dataframe
+from processors.tabular_processor import process_tabular_data
 
 # Suppress harmless pdfminer warnings about fonts
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
@@ -41,8 +41,8 @@ async def upload_file(file: UploadFile = File(...)):
     
     if filename.endswith(".xlsx"):
         try:
-            df = parse_xlsx(file)
-            tabular_data = process_dataframe(df)
+            raw_data = parse_xlsx(file)
+            tabular_data = process_tabular_data(raw_data)
             return UploadResponse(
                 file_name=file.filename,
                 file_type="xlsx",
