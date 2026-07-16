@@ -1,8 +1,14 @@
 import React from 'react';
 import { Activity } from 'lucide-react';
-import './App.css'; // Optional component-specific styles if needed
+import FileUpload from './components/FileUpload';
+import './App.css';
 
 function App() {
+  const handleFileSelect = (file) => {
+    console.log("File selected:", file);
+    // TODO: Upload to backend in Commit 9
+  };
+
   return (
     <div className="app-container">
       {/* Header */}
@@ -21,7 +27,7 @@ function App() {
         <div className="placeholder-hero">
           <h2>Upload a File to Begin</h2>
           <p>We support .xlsx, .pdf, and .docx up to 15MB.</p>
-          {/* FileUpload component will go here */}
+          <FileUpload onFileSelect={handleFileSelect} />
         </div>
       </main>
     </div>
