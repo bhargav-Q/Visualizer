@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, Loader2, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import FileUpload from './components/FileUpload';
+import Dashboard from './components/Dashboard';
 import './App.css';
 
 function App() {
@@ -72,11 +73,13 @@ function App() {
           )}
 
           {data && (
-            <div className="success-state">
-              <h3>Upload Successful!</h3>
-              <p>Data category: {data.data_category}</p>
-              {/* Dashboard will be rendered here in Phase 4 */}
-            </div>
+            <Dashboard 
+              data={data} 
+              onReset={() => {
+                setData(null);
+                setError(null);
+              }} 
+            />
           )}
         </div>
       </main>
