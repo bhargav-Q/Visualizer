@@ -43,9 +43,48 @@ async def upload_file(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
             
-    elif filename.endswith((".pdf", ".docx")):
-        raise HTTPException(status_code=501, detail="Text processing is not implemented yet (Phase 2)")
-    
+    elif filename.endswith(".pdf"):
+        try:
+            from parsers.pdf_parser import parse_pdf
+            from processors.text_processor import process_text
+            
+            parsed_data = parse_pdf(file)
+            text_data = process_text(
+                raw_text=parsed_data["text"],
+                page_count=parsed_data["page_count"],
+                paragraph_count=None
+            )
+            return UploadResponse(
+                file_name=file.filename,
+                file_type="pdf",
+                data_category="text",
+                tabular=None,
+                text=text_data
+            )
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
+
+    elif filename.endswith(".docx"):
+        try:
+            from parsers.docx_parser import parse_docx
+            from processors.text_processor import process_text
+            
+            parsed_data = parse_docx(file)
+            text_data = process_text(
+                raw_text=parsed_data["text"],
+                page_count=None,
+                paragraph_count=parsed_data["paragraph_count"]
+            )
+            return UploadResponse(
+                file_name=file.filename,
+                file_type="docx",
+                data_category="text",
+                tabular=None,
+                text=text_data
+            )
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
+
     else:
         raise HTTPException(status_code=400, detail="Unsupported file type. Allowed: .xlsx, .pdf, .docx")
 
