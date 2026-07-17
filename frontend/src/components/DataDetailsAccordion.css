@@ -1,0 +1,230 @@
+.accordion-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.accordion-section .section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.accordion-section .section-title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.geo-faq-item {
+  border-radius: var(--radius);
+  border: 1px solid var(--card-border);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.geo-faq-item[open] {
+  border-color: rgba(106, 27, 154, 0.25);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.geo-faq-question {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+/* Hide default summary arrow in Chrome/Safari/Firefox */
+.geo-faq-question::-webkit-details-marker {
+  display: none;
+}
+
+.geo-faq-question::after {
+  content: "+";
+  font-family: 'Work Sans', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: var(--brand-purple);
+  transition: transform 0.2s ease;
+  margin-left: 16px;
+}
+
+.geo-faq-item[open] .geo-faq-question::after {
+  content: "\2212"; /* Unicode minus sign */
+  transform: rotate(180deg);
+}
+
+.col-name-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.col-index {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: rgba(106, 27, 154, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.col-name {
+  font-family: 'Work Sans', sans-serif;
+  font-weight: 600;
+}
+
+.col-dtype {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 12px;
+  letter-spacing: 0.03em;
+}
+
+.dtype-object {
+  background: var(--badge-sales-strategy);
+  color: var(--color-sales-strategy);
+}
+
+.dtype-float {
+  background: var(--badge-crm-tips);
+  color: var(--color-crm-tips);
+}
+
+.dtype-int {
+  background: var(--badge-ai-sales);
+  color: var(--color-ai-sales);
+}
+
+.dtype-date {
+  background: var(--badge-meeting-intelligence);
+  color: var(--color-meeting-intelligence);
+}
+
+.dtype-other {
+  background: rgba(102, 102, 102, 0.08);
+  color: var(--text-secondary);
+}
+
+.geo-faq-answer {
+  padding: 0 24px 24px 24px;
+  border-top: 1px dashed rgba(106, 27, 154, 0.1);
+  background: rgba(106, 27, 154, 0.01);
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Numeric Stat Grid */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.stat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: white;
+  border: 1px solid rgba(106, 27, 154, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.stat-val {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--brand-purple);
+}
+
+/* Categorical Summary */
+.categorical-info {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.unique-count {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.top-values-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.top-values-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.top-value-pill {
+  background: white;
+  border: 1px solid rgba(106, 27, 154, 0.08);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-value-pill .val {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.top-value-pill .count {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  background: rgba(106, 27, 154, 0.05);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.no-summary {
+  margin-top: 18px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
