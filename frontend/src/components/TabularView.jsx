@@ -1,11 +1,10 @@
 import React from 'react';
 import StatsCards from './StatsCards';
 import ChartPanel from './ChartPanel';
-import DataTable from './DataTable';
 import './TabularView.css';
 
 const TabularView = ({ tabularData }) => {
-  const { row_count, col_count, numeric_summary, preview_rows, columns, charts } = tabularData;
+  const { row_count, col_count, numeric_summary, columns, charts } = tabularData;
 
   const metrics = [
     { title: "Total Rows", value: row_count.toLocaleString() },
@@ -17,7 +16,6 @@ const TabularView = ({ tabularData }) => {
     <div className="tabular-view">
       <StatsCards metrics={metrics} />
       <ChartPanel charts={charts} />
-      <DataTable columns={columns} preview_rows={preview_rows} />
     </div>
   );
 };
