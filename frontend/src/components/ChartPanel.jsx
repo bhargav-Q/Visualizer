@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line
@@ -9,7 +10,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div className="chart-tooltip glass-panel">
-        <p className="label">{`${label} : ${payload[0].value}`}</p>
+        <p className="label">{`${label} : ${payload[0].value.toLocaleString()}`}</p>
       </div>
     );
   }
@@ -17,38 +18,61 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const ChartPanel = ({ charts }) => {
+  const [focusIndex, setFocusIndex] = useState(null);
+
   if (!charts || charts.length === 0) return null;
+
+  const getGridClass = () => {
+    if (charts.length === 1) return 'cols-1';
+    if (charts.length === 2) return 'cols-2';
+    return 'cols-3';
+  };
 
   return (
     <div className="charts-section">
       <h3 className="section-title">Data Visualizations</h3>
-      <div className="charts-grid">
-        {charts.map((chart, idx) => (
-          <div key={idx} className="chart-container glass-panel">
-            <h4>{chart.title}</h4>
-            <div className="chart-wrapper">
-              <ResponsiveContainer width="100%" height={300}>
-                {chart.type === 'bar' ? (
-                  <BarChart data={chart.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-                    <XAxis dataKey={chart.x_key} stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
-                    <YAxis stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar dataKey={chart.y_key} fill="var(--accent-color)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                ) : (
-                  <LineChart data={chart.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-                    <XAxis dataKey={chart.x_key} stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
-                    <YAxis stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey={chart.y_key} stroke="var(--accent-color)" strokeWidth={3} dot={{r: 4, fill: "var(--bg-dark)", strokeWidth: 2}} />
-                  </LineChart>
-                )}
-              </ResponsiveContainer>
+      <div className={`charts-grid ${getGridClass()}`}>
+        {charts.map((chart, idx) => {
+          const isExpanded = focusIndex === idx;
+          return (
+            <div 
+              key={idx} 
+              className={`chart-container glass-panel ${isExpanded ? 'expanded' : ''}`}
+            >
+              <div className="chart-header">
+                <h4>{chart.title}</h4>
+                <button 
+                  className="focus-toggle-btn"
+                  onClick={() => setFocusIndex(isExpanded ? null : idx)}
+                  title={isExpanded ? "Collapse view" : "Expand view"}
+                >
+                  {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </button>
+              </div>
+              <div className="chart-wrapper">
+                <ResponsiveContainer width="100%" height={isExpanded ? 450 : 300}>
+                  {chart.type === 'bar' ? (
+                    <BarChart data={chart.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+                      <XAxis dataKey={chart.x_key} stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
+                      <YAxis stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Bar dataKey={chart.y_key} fill="var(--accent-color)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  ) : (
+                    <LineChart data={chart.data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+                      <XAxis dataKey={chart.x_key} stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
+                      <YAxis stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}} />
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Line type="monotone" dataKey={chart.y_key} stroke="var(--accent-color)" strokeWidth={3} dot={{r: 4, fill: "var(--bg-dark)", strokeWidth: 2}} />
+                    </LineChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
