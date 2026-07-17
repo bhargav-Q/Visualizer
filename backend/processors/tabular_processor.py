@@ -42,20 +42,8 @@ def process_tabular_data(raw_data) -> TabularResult:
 
     # 2. Columns Info
     columns = [ColumnInfo(name=str(h), dtype=col_types[h]) for h in headers]
-    
-    # 3. Preview Rows (first 100)
-    # Serialize datetimes for JSON
-    preview_rows = []
-    for row in rows[:100]:
-        clean_row = []
-        for val in row:
-            if isinstance(val, datetime):
-                clean_row.append(val.isoformat())
-            else:
-                clean_row.append(val)
-        preview_rows.append(clean_row)
 
-    # 4. Summaries
+    # 3. Summaries
     numeric_summary = {}
     categorical_summary = {}
     
@@ -91,45 +79,86 @@ def process_tabular_data(raw_data) -> TabularResult:
                 top_values=top_values
             )
 
-    # 5. Simple Autogen Charts
+    # 5. Smart Autogen Charts (Up to 4)
     charts = []
-    cat_cols = list(categorical_summary.keys())
     num_cols = list(numeric_summary.keys())
+    date_cols = [h for h in headers if col_types[h] == "datetime"]
     
-    if cat_cols and num_cols:
-        x_col = cat_cols[0]
-        y_col = num_cols[0]
-        
-        # Group by x_col, average y_col
-        grouped = {}
-        counts = {}
-        for x_val, y_val in zip(col_data[x_col], col_data[y_col]):
-            if x_val is not None and isinstance(y_val, (int, float)):
-                x_str = str(x_val)
-                grouped[x_str] = grouped.get(x_str, 0.0) + float(y_val)
-                counts[x_str] = counts.get(x_str, 0) + 1
-                
-        # Calculate averages
-        averages = {k: grouped[k]/counts[k] for k in grouped}
-        
-        # Get top 5 by average
-        top_averages = sorted(averages.items(), key=lambda item: item[1], reverse=True)[:5]
-        
-        chart_data = []
-        for k, v in top_averages:
-            chart_data.append({x_col: k, y_col: v})
+    # Filter for low-cardinality categorical columns (between 2 and 20 unique values)
+    # Exclude identifier columns that scale with row count (only if row count is substantial)
+    cat_cols = [
+        h for h, summary in categorical_summary.items()
+        if 2 <= summary.unique <= 20 and (row_count <= 10 or summary.unique < row_count * 0.9)
+    ]
+    # Sort categorical columns by unique counts (cleaner/simpler charts first)
+    cat_cols.sort(key=lambda h: categorical_summary[h].unique)
+
+    # A. Time Series Line Charts (Up to 2)
+    line_charts_count = 0
+    for date_col in date_cols:
+        if line_charts_count >= 2:
+            break
+        for num_col in num_cols:
+            if line_charts_count >= 2:
+                break
             
-        charts.append(ChartData(
-            type="bar",
-            title=f"Average {y_col} by {x_col}",
-            x_key=x_col,
-            y_key=y_col,
-            data=chart_data
-        ))
+            # Group by year-month
+            grouped = {}
+            for d_val, n_val in zip(col_data[date_col], col_data[num_col]):
+                if isinstance(d_val, datetime) and n_val is not None and isinstance(n_val, (int, float)):
+                    month_str = d_val.strftime("%Y-%m")
+                    grouped[month_str] = grouped.get(month_str, 0.0) + float(n_val)
+            
+            if grouped:
+                sorted_months = sorted(grouped.keys())
+                chart_data = [{date_col: m, num_col: grouped[m]} for m in sorted_months]
+                
+                charts.append(ChartData(
+                    type="line",
+                    title=f"Total {num_col} over Time",
+                    x_key=date_col,
+                    y_key=num_col,
+                    data=chart_data
+                ))
+                line_charts_count += 1
+
+    # B. Categorical Bar Charts (Up to remainder to make 4)
+    bar_charts_count = 0
+    max_bar_charts = max(0, 4 - len(charts))
+    for cat_col in cat_cols:
+        if bar_charts_count >= max_bar_charts:
+            break
+        for num_col in num_cols:
+            if bar_charts_count >= max_bar_charts:
+                break
+            
+            # Group by category, compute average
+            grouped = {}
+            counts = {}
+            for c_val, n_val in zip(col_data[cat_col], col_data[num_col]):
+                if c_val is not None and n_val is not None and isinstance(n_val, (int, float)):
+                    c_str = str(c_val)
+                    grouped[c_str] = grouped.get(c_str, 0.0) + float(n_val)
+                    counts[c_str] = counts.get(c_str, 0) + 1
+            
+            if grouped:
+                # Calculate averages
+                averages = {k: grouped[k] / counts[k] for k in grouped}
+                sorted_categories = sorted(averages.items(), key=lambda item: item[1], reverse=True)
+                
+                chart_data = [{cat_col: k, num_col: v} for k, v in sorted_categories]
+                
+                charts.append(ChartData(
+                    type="bar",
+                    title=f"Average {num_col} by {cat_col}",
+                    x_key=cat_col,
+                    y_key=num_col,
+                    data=chart_data
+                ))
+                bar_charts_count += 1
 
     return TabularResult(
         columns=columns,
-        preview_rows=preview_rows,
         row_count=row_count,
         col_count=col_count,
         numeric_summary=numeric_summary,

@@ -51,3 +51,40 @@ def test_tabular_processor_pure_python():
     assert result.numeric_summary["A"].mean == 3.0
     assert "B" in result.categorical_summary
     assert result.categorical_summary["B"].unique == 2
+
+
+def test_tabular_processor_smart_charts():
+    """Test that tabular processor creates appropriate bar and line charts and skips high cardinality columns."""
+    from datetime import datetime
+
+    headers = ["TxnDate", "Debit", "Dept", "GLID"]
+    rows = []
+    # Create 22 rows to exceed the categorical threshold of 20 for GLID
+    for i in range(22):
+        date_val = datetime(2025, 1 + (i % 2), 1 + i)
+        debit_val = float(100 + i * 10)
+        dept_val = "HR" if i % 2 == 0 else "IT"
+        glid_val = f"GL{i:03d}"  # Unique GLID for each row (22 unique values)
+        rows.append([date_val, debit_val, dept_val, glid_val])
+
+    mock_raw_data = {
+        "headers": headers,
+        "rows": rows
+    }
+
+    result = process_tabular_data(mock_raw_data)
+
+    # 1. Assert line chart is generated for TxnDate
+    line_charts = [c for c in result.charts if c.type == "line"]
+    assert len(line_charts) > 0
+    assert line_charts[0].x_key == "TxnDate"
+    assert line_charts[0].y_key == "Debit"
+
+    # 2. Assert bar chart is generated for Dept (cardinality 2)
+    bar_charts = [c for c in result.charts if c.type == "bar"]
+    assert len(bar_charts) > 0
+    assert any(c.x_key == "Dept" for c in bar_charts)
+
+    # 3. Assert NO chart is generated for GLID (since its cardinality is 22, which is > 20)
+    assert not any(c.x_key == "GLID" for c in result.charts)
+
