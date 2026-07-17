@@ -2,3 +2,4 @@
 backend/venv/
 __pycache__/
 design.md
+PROJECT_ARCHITECTURE.md
