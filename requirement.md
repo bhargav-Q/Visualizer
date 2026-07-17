@@ -9,7 +9,7 @@ This file defines the **exact JSON structure** the backend will return for each 
 ```
 POST /api/upload
 Content-Type: multipart/form-data
-Body: file (max 15 MB, allowed: .xlsx, .pdf, .docx)
+Body: file (max 15 MB, allowed: .xlsx, .pdf, .docx, .csv)
 ```
 
 ---
@@ -21,7 +21,7 @@ Every successful response shares this top-level shape:
 ```json
 {
   "file_name": "string",
-  "file_type": "xlsx | pdf | docx",
+  "file_type": "xlsx | pdf | docx | csv",
   "data_category": "tabular | text",
   "tabular": { ... } | null,
   "text": { ... } | null
@@ -262,7 +262,7 @@ All errors follow this format:
 
 | Scenario | HTTP Status | Example Response |
 |----------|-------------|------------------|
-| Unsupported file type | `400` | `{"detail": "Unsupported file type '.txt'. Allowed: .xlsx, .pdf, .docx"}` |
+| Unsupported file type | `400` | `{"detail": "Unsupported file type '.txt'. Allowed: .xlsx, .pdf, .docx, .csv"}` |
 | File too large | `413` | `{"detail": "File size exceeds 15 MB limit"}` |
 | Corrupt / unreadable file | `422` | `{"detail": "Could not parse file. The file may be corrupted or password-protected."}` |
 | Empty file / no data | `422` | `{"detail": "File contains no extractable data"}` |

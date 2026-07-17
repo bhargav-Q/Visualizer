@@ -46,3 +46,18 @@ def test_upload_valid_pdf_endpoint(client, mocker):
     assert data["data_category"] == "text"
     assert data["text"]["summary"] == "Mocked summary"
     assert data["text"]["word_count"] == 3
+
+
+def test_upload_valid_csv_endpoint(client, mocker):
+    """Test uploading a valid CSV, mocking the internal parsers to avoid actual file system calls."""
+    mocker.patch("parsers.csv_parser.parse_csv", return_value={"headers": ["Date", "Val"], "rows": [["2025-01-01", 10.0]]})
+
+    file_content = b"Date,Val\n2025-01-01,10.0"
+    files = {"file": ("test.csv", file_content, "text/csv")}
+    response = client.post("/api/upload", files=files)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["file_type"] == "csv"
+    assert data["data_category"] == "tabular"
+    assert data["tabular"]["row_count"] == 1

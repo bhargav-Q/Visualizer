@@ -88,3 +88,20 @@ def test_tabular_processor_smart_charts():
     # 3. Assert NO chart is generated for GLID (since its cardinality is 22, which is > 20)
     assert not any(c.x_key == "GLID" for c in result.charts)
 
+
+def test_csv_parser():
+    from parsers.csv_parser import parse_csv
+    from fastapi import UploadFile
+    from io import BytesIO
+    from datetime import datetime
+
+    file_content = b"Date,Val,Category\n2025-01-01,10.5,Sales\n2025-01-02,20.0,Marketing\n"
+    mock_file = UploadFile(filename="test.csv", file=BytesIO(file_content))
+
+    result = parse_csv(mock_file)
+    assert result["headers"] == ["Date", "Val", "Category"]
+    assert len(result["rows"]) == 2
+    assert isinstance(result["rows"][0][0], datetime)
+    assert result["rows"][0][1] == 10.5
+    assert result["rows"][0][2] == "Sales"
+

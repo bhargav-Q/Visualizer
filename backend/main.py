@@ -53,6 +53,21 @@ async def upload_file(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
             
+    elif filename.endswith(".csv"):
+        try:
+            from parsers.csv_parser import parse_csv
+            raw_data = parse_csv(file)
+            tabular_data = process_tabular_data(raw_data)
+            return UploadResponse(
+                file_name=file.filename,
+                file_type="csv",
+                data_category="tabular",
+                tabular=tabular_data,
+                text=None
+            )
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
+            
     elif filename.endswith(".pdf"):
         try:
             from parsers.pdf_parser import parse_pdf
@@ -96,7 +111,7 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
 
     else:
-        raise HTTPException(status_code=400, detail="Unsupported file type. Allowed: .xlsx, .pdf, .docx")
+        raise HTTPException(status_code=400, detail="Unsupported file type. Allowed: .xlsx, .pdf, .docx, .csv")
 
 @app.get("/api/health")
 def health_check():
