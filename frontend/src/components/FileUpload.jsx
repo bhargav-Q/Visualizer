@@ -6,7 +6,9 @@ const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 const ALLOWED_TYPES = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'application/pdf': '.pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'text/csv': '.csv',
+  'application/vnd.ms-excel': '.csv'
 };
 
 const FileUpload = ({ onFileSelect }) => {
@@ -38,13 +40,13 @@ const FileUpload = ({ onFileSelect }) => {
 
     // Check type by extension as fallback
     const ext = '.' + selectedFile.name.split('.').pop().toLowerCase();
-    const isAllowedExt = ['.xlsx', '.pdf', '.docx'].includes(ext);
+    const isAllowedExt = ['.xlsx', '.pdf', '.docx', '.csv'].includes(ext);
     
     // Check type by mime type
     const isAllowedMime = Object.keys(ALLOWED_TYPES).includes(selectedFile.type);
 
     if (!isAllowedExt && !isAllowedMime) {
-      setError(`Unsupported file type. Please upload a .xlsx, .pdf, or .docx file.`);
+      setError(`Unsupported file type. Please upload a .xlsx, .pdf, .docx, or .csv file.`);
       return false;
     }
 
@@ -94,7 +96,7 @@ const FileUpload = ({ onFileSelect }) => {
           type="file"
           ref={fileInputRef}
           onChange={handleFileInput}
-          accept=".xlsx,.pdf,.docx"
+          accept=".xlsx,.pdf,.docx,.csv"
           className="hidden-input"
         />
         
@@ -119,6 +121,7 @@ const FileUpload = ({ onFileSelect }) => {
               <span className="format-badge">XLSX</span>
               <span className="format-badge">PDF</span>
               <span className="format-badge">DOCX</span>
+              <span className="format-badge">CSV</span>
             </div>
           </div>
         )}
