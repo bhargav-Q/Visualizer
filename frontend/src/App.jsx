@@ -47,41 +47,39 @@ function App() {
 
       {/* Main Content Area */}
       <main className="main-content animate-fade-in">
-        <div className="placeholder-hero">
-          {!isLoading && !data && (
-            <>
-              <h2>Upload a File to Begin</h2>
-              <p>We support .xlsx, .pdf, and .docx up to 15MB.</p>
-              <FileUpload onFileSelect={handleFileSelect} />
-            </>
-          )}
+        {!isLoading && !data && (
+          <div className="placeholder-hero">
+            <h2>Upload a File to Begin</h2>
+            <p>We support .xlsx, .pdf, .docx, and .csv up to 15MB.</p>
+            <FileUpload onFileSelect={handleFileSelect} />
+          </div>
+        )}
 
-          {isLoading && (
-            <div className="loading-state flex-col-center">
-              <Loader2 className="animate-spin" size={48} color="var(--accent-color)" />
-              <h3 style={{ marginTop: '16px' }}>Processing File...</h3>
-              <p style={{ color: 'var(--text-secondary)' }}>Extracting data and running AI models.</p>
-            </div>
-          )}
+        {isLoading && (
+          <div className="loading-state flex-col-center">
+            <Loader2 className="animate-spin" size={48} color="var(--accent-color)" />
+            <h3 style={{ marginTop: '16px' }}>Processing File...</h3>
+            <p style={{ color: 'var(--text-secondary)' }}>Extracting data and running AI models.</p>
+          </div>
+        )}
 
-          {error && (
-            <div className="error-toast">
-              <AlertCircle size={20} />
-              <span>{error}</span>
-              <button onClick={() => setError(null)}>Try Again</button>
-            </div>
-          )}
+        {error && (
+          <div className="error-toast">
+            <AlertCircle size={20} />
+            <span>{error}</span>
+            <button onClick={() => setError(null)}>Try Again</button>
+          </div>
+        )}
 
-          {data && (
-            <Dashboard 
-              data={data} 
-              onReset={() => {
-                setData(null);
-                setError(null);
-              }} 
-            />
-          )}
-        </div>
+        {data && (
+          <Dashboard 
+            data={data} 
+            onReset={() => {
+              setData(null);
+              setError(null);
+            }} 
+          />
+        )}
       </main>
     </div>
   );
