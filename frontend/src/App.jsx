@@ -80,7 +80,7 @@ function App() {
       <main className="main-content animate-fade-in">
         {!isLoading && !data && (
           <div className="placeholder-hero">
-            <h2>Upload a File to Begin</h2>
+            <h3>Upload a File to Begin</h3>
             <p>We support .xlsx, .pdf, .docx, and .csv up to 15MB.</p>
             <FileUpload onFileSelect={handleFileSelect} />
           </div>

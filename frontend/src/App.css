@@ -204,14 +204,14 @@
   align-items: center;
 }
 
-.placeholder-hero h2 {
+.placeholder-hero h3 {
   font-family: 'Newsreader', Georgia, serif;
-  font-size: 2.8rem;
+  font-size: 2.3rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 12px;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 
 .placeholder-hero p {
