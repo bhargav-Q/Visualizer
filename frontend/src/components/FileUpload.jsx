@@ -119,8 +119,8 @@ const FileUpload = ({ onFileSelect }) => {
                 <line x1="22" y1="28" x2="42" y2="28" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
                 <line x1="22" y1="36" x2="36" y2="36" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
                 <line x1="22" y1="44" x2="30" y2="44" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
-                <circle cx="44" cy="44" r="10" fill="white" stroke="var(--brand-purple-accent)" strokeWidth="2.5" />
-                <path d="M40 45L42.5 42.5L45 45L48 41" stroke="var(--brand-purple-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="10" />
+                <circle cx="44" cy="44" r="10" fill="var(--bg-card)" stroke="var(--brand-purple-accent)" strokeWidth="2.5" />
+                <path d="M40 45L42.5 42.5L45 45L48 41" stroke="var(--brand-purple-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <defs>
                   <linearGradient id="brandGrad" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
                     <stop stopColor="var(--brand-purple)" />
