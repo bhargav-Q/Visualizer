@@ -46,6 +46,14 @@
   /* Body radial backgrounds */
   --radial-1: rgba(106, 27, 154, 0.04);
   --radial-2: rgba(156, 77, 204, 0.04);
+
+  /* SVG Custom Themes - Dark in bright background */
+  --svg-doc-border: #6a1b9a;
+  --svg-doc-bg: rgba(106, 27, 154, 0.04);
+  --svg-doc-lines: #6a1b9a;
+  --svg-badge-circle: #ffffff;
+  --svg-badge-border: #9c4dcc;
+  --svg-badge-check: #9c4dcc;
 }
 
 /* Dark theme overrides */
@@ -87,6 +95,14 @@
   
   --radial-1: rgba(168, 85, 247, 0.15);
   --radial-2: rgba(106, 27, 154, 0.15);
+
+  /* SVG Custom Themes - Light in dark background */
+  --svg-doc-border: #ffffff;
+  --svg-doc-bg: rgba(255, 255, 255, 0.12);
+  --svg-doc-lines: #ffffff;
+  --svg-badge-circle: #ffffff;
+  --svg-badge-border: #ffffff;
+  --svg-badge-check: #6a1b9a;
 }
 
 /* Fallback Font Configuration for Work Sans and Newsreader to avoid CLS */

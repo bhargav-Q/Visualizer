@@ -114,19 +114,13 @@ const FileUpload = ({ onFileSelect }) => {
           <div className="upload-content">
             <div className="icon-wrapper pulse-animation">
               <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="14" y="6" width="36" height="52" rx="6" fill="url(#brandGrad)" opacity="0.1" stroke="var(--brand-purple)" strokeWidth="2.5" />
-                <path d="M34 6H48C49.1046 6 50 6.89543 50 8V20H38V6H34Z" fill="var(--brand-purple)" opacity="0.2" />
-                <line x1="22" y1="28" x2="42" y2="28" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
-                <line x1="22" y1="36" x2="36" y2="36" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
-                <line x1="22" y1="44" x2="30" y2="44" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
-                <circle cx="44" cy="44" r="10" fill="var(--bg-card)" stroke="var(--brand-purple-accent)" strokeWidth="2.5" />
-                <path d="M40 45L42.5 42.5L45 45L48 41" stroke="var(--brand-purple-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <defs>
-                  <linearGradient id="brandGrad" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="var(--brand-purple)" />
-                    <stop offset="1" stopColor="var(--brand-purple-accent)" />
-                  </linearGradient>
-                </defs>
+                <rect x="14" y="6" width="36" height="52" rx="6" fill="var(--svg-doc-bg)" stroke="var(--svg-doc-border)" strokeWidth="2.5" />
+                <path d="M34 6H48C49.1046 6 50 6.89543 50 8V20H38V6H34Z" fill="var(--svg-doc-border)" opacity="0.2" />
+                <line x1="22" y1="28" x2="42" y2="28" stroke="var(--svg-doc-lines)" strokeWidth="3" strokeLinecap="round" />
+                <line x1="22" y1="36" x2="36" y2="36" stroke="var(--svg-doc-lines)" strokeWidth="3" strokeLinecap="round" />
+                <line x1="22" y1="44" x2="30" y2="44" stroke="var(--svg-doc-lines)" strokeWidth="3" strokeLinecap="round" />
+                <circle cx="44" cy="44" r="10" fill="var(--svg-badge-circle)" stroke="var(--svg-badge-border)" strokeWidth="2.5" />
+                <path d="M40 45L42.5 42.5L45 45L48 41" stroke="var(--svg-badge-check)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h3>Drag & Drop your file here</h3>
