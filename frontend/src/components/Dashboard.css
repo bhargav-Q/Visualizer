@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dashboard-header {
@@ -11,34 +11,110 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
-.back-button {
-  display: flex;
+/* White Button Style from design.md */
+.btn-white {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  color: var(--text-secondary);
-  font-weight: 500;
-  transition: all 0.2s;
+  background: var(--bg-card);
+  border: 1px solid rgba(106, 27, 154, 0.18);
+  color: var(--brand-purple);
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-light);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.back-button:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+.btn-white:hover {
+  background: rgba(106, 27, 154, 0.02);
+  border-color: var(--brand-purple);
+  box-shadow: 0 4px 12px rgba(106, 27, 154, 0.05);
+  transform: translateY(-1px);
 }
 
 .file-info {
   display: flex;
   align-items: center;
   gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--card-border);
   padding: 8px 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-light);
 }
 
-.file-info .file-name {
+.file-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(106, 27, 154, 0.05);
+}
+
+.file-name {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 0.95rem;
+}
+
+/* Badge types styled using 8% opacity style */
+.badge-type {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.badge-tabular {
+  background: var(--badge-sales-strategy);
+  color: var(--color-sales-strategy);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.badge-text {
+  background: var(--badge-ai-sales);
+  color: var(--color-ai-sales);
+  border: 1px solid rgba(106, 27, 154, 0.15);
+}
+
+/* Tabs styles from design.md content-type-tabs */
+.content-type-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid rgba(106, 27, 154, 0.05);
+  padding-bottom: 12px;
+}
+
+.ct-tab {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 20px;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ct-tab:hover {
+  color: var(--brand-purple);
+  background: rgba(106, 27, 154, 0.04);
+}
+
+.ct-tab.active {
+  background: var(--brand-gradient);
+  color: #ffffff !important;
+  box-shadow: var(--btn-shadow);
 }
 
 .dashboard-content {
@@ -71,6 +147,15 @@
 }
 
 @media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .content-type-tabs {
+    flex-wrap: wrap;
+  }
+  
   .charts-grid.cols-2,
   .charts-grid.cols-3 {
     grid-template-columns: 1fr;

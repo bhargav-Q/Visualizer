@@ -113,15 +113,29 @@ const FileUpload = ({ onFileSelect }) => {
         ) : (
           <div className="upload-content">
             <div className="icon-wrapper pulse-animation">
-              <UploadCloud size={48} color="var(--accent-color)" />
+              <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="14" y="6" width="36" height="52" rx="6" fill="url(#brandGrad)" opacity="0.1" stroke="var(--brand-purple)" strokeWidth="2.5" />
+                <path d="M34 6H48C49.1046 6 50 6.89543 50 8V20H38V6H34Z" fill="var(--brand-purple)" opacity="0.2" />
+                <line x1="22" y1="28" x2="42" y2="28" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
+                <line x1="22" y1="36" x2="36" y2="36" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
+                <line x1="22" y1="44" x2="30" y2="44" stroke="var(--brand-purple)" strokeWidth="3" strokeLinecap="round" />
+                <circle cx="44" cy="44" r="10" fill="white" stroke="var(--brand-purple-accent)" strokeWidth="2.5" />
+                <path d="M40 45L42.5 42.5L45 45L48 41" stroke="var(--brand-purple-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="10" />
+                <defs>
+                  <linearGradient id="brandGrad" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="var(--brand-purple)" />
+                    <stop offset="1" stopColor="var(--brand-purple-accent)" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
             <h3>Drag & Drop your file here</h3>
             <p>or click to browse from your computer</p>
             <div className="file-badges">
-              <span className="format-badge">XLSX</span>
-              <span className="format-badge">PDF</span>
-              <span className="format-badge">DOCX</span>
-              <span className="format-badge">CSV</span>
+              <span className="format-badge xlsx">XLSX</span>
+              <span className="format-badge pdf">PDF</span>
+              <span className="format-badge docx">DOCX</span>
+              <span className="format-badge csv">CSV</span>
             </div>
           </div>
         )}
