@@ -6,7 +6,7 @@ const TextSummary = ({ summary, ai_model }) => {
   return (
     <div className="summary-section glass-panel">
       <div className="section-header">
-        <Sparkles size={24} color="var(--accent-color)" />
+        <Sparkles size={24} color="var(--brand-purple)" />
         <h3>AI Summary</h3>
       </div>
       <p className="summary-text">{summary}</p>

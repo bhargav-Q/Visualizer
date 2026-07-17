@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  LineChart, Line, Label
+  LineChart, Line, Label, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import './ChartPanel.css';
 
+const PIE_COLORS = ['#6a1b9a', '#9c4dcc', '#2563eb', '#22c55e', '#d97700', '#dc2626'];
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
+    const dataName = payload[0].name;
+    const value = payload[0].value;
     return (
-      <div className="chart-tooltip glass-panel">
-        <p className="label">{`${label} : ${payload[0].value.toLocaleString()}`}</p>
+      <div className="chart-tooltip">
+        <p className="label">{label ? `${label}` : `${dataName}`}: {value.toLocaleString()}</p>
       </div>
     );
   }
@@ -37,7 +41,7 @@ const ChartPanel = ({ charts }) => {
           return (
             <div 
               key={idx} 
-              className={`chart-container glass-panel ${isExpanded ? 'expanded' : ''}`}
+              className={`chart-container ${isExpanded ? 'expanded' : ''}`}
             >
               <div className="chart-header">
                 <h4>{chart.title}</h4>
@@ -53,27 +57,52 @@ const ChartPanel = ({ charts }) => {
                 <ResponsiveContainer width="100%" height={isExpanded ? 450 : 300}>
                   {chart.type === 'bar' ? (
                     <BarChart data={chart.data} margin={{ top: 20, right: 30, left: 35, bottom: 25 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-                      <XAxis dataKey={chart.x_key} stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}}>
-                        <Label value={chart.x_key} offset={-15} position="insideBottom" fill="var(--text-secondary)" style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em'}} />
+                      <defs>
+                        <linearGradient id={`barGrad-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--brand-purple)" stopOpacity={0.9}/>
+                          <stop offset="95%" stopColor="var(--brand-purple-accent)" stopOpacity={0.6}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(106,27,154,0.08)" vertical={false} />
+                      <XAxis dataKey={chart.x_key} stroke="var(--text-muted)" tick={{fill: 'var(--text-muted)', fontFamily: 'Work Sans', fontSize: 11}}>
+                        <Label value={chart.x_key} offset={-15} position="insideBottom" fill="var(--text-muted)" style={{fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'Work Sans'}} />
                       </XAxis>
-                      <YAxis stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}}>
-                        <Label value={chart.y_key} angle={-90} position="insideLeft" offset={-15} fill="var(--text-secondary)" style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', textAnchor: 'middle', letterSpacing: '0.05em'}} />
+                      <YAxis stroke="var(--text-muted)" tick={{fill: 'var(--text-muted)', fontFamily: 'Work Sans', fontSize: 11}}>
+                        <Label value={chart.y_key} angle={-90} position="insideLeft" offset={-15} fill="var(--text-muted)" style={{fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', textAnchor: 'middle', letterSpacing: '0.05em', fontFamily: 'Work Sans'}} />
                       </YAxis>
                       <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar dataKey={chart.y_key} fill="var(--accent-color)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey={chart.y_key} fill={`url(#barGrad-${idx})`} radius={[4, 4, 0, 0]} />
                     </BarChart>
+                  ) : chart.type === 'pie' ? (
+                    <PieChart>
+                      <Pie
+                        data={chart.data}
+                        cx="50%"
+                        cy="45%"
+                        innerRadius={isExpanded ? 80 : 50}
+                        outerRadius={isExpanded ? 120 : 80}
+                        paddingAngle={4}
+                        dataKey={chart.y_key}
+                        nameKey={chart.x_key}
+                      >
+                        {chart.data.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontFamily: 'Work Sans', fontSize: 12, color: 'var(--text-secondary)'}} />
+                    </PieChart>
                   ) : (
                     <LineChart data={chart.data} margin={{ top: 20, right: 30, left: 35, bottom: 25 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-                      <XAxis dataKey={chart.x_key} stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}}>
-                        <Label value={chart.x_key} offset={-15} position="insideBottom" fill="var(--text-secondary)" style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em'}} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(106,27,154,0.08)" vertical={false} />
+                      <XAxis dataKey={chart.x_key} stroke="var(--text-muted)" tick={{fill: 'var(--text-muted)', fontFamily: 'Work Sans', fontSize: 11}}>
+                        <Label value={chart.x_key} offset={-15} position="insideBottom" fill="var(--text-muted)" style={{fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'Work Sans'}} />
                       </XAxis>
-                      <YAxis stroke="var(--text-secondary)" tick={{fill: 'var(--text-secondary)'}}>
-                        <Label value={chart.y_key} angle={-90} position="insideLeft" offset={-15} fill="var(--text-secondary)" style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', textAnchor: 'middle', letterSpacing: '0.05em'}} />
+                      <YAxis stroke="var(--text-muted)" tick={{fill: 'var(--text-muted)', fontFamily: 'Work Sans', fontSize: 11}}>
+                        <Label value={chart.y_key} angle={-90} position="insideLeft" offset={-15} fill="var(--text-muted)" style={{fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', textAnchor: 'middle', letterSpacing: '0.05em', fontFamily: 'Work Sans'}} />
                       </YAxis>
                       <RechartsTooltip content={<CustomTooltip />} />
-                      <Line type="monotone" dataKey={chart.y_key} stroke="var(--accent-color)" strokeWidth={3} dot={{r: 4, fill: "var(--bg-dark)", strokeWidth: 2}} />
+                      <Line type="monotone" dataKey={chart.y_key} stroke="var(--brand-purple)" strokeWidth={3} dot={{r: 5, fill: "#ffffff", stroke: "var(--brand-purple-accent)", strokeWidth: 2}} activeDot={{r: 7}} />
                     </LineChart>
                   )}
                 </ResponsiveContainer>

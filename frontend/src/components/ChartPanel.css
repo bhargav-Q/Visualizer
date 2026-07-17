@@ -1,12 +1,40 @@
+.charts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.charts-section .section-title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(106, 27, 154, 0.05);
+}
+
 .chart-container {
   padding: 24px;
   position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-light);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chart-container:hover {
+  border-color: rgba(106, 27, 154, 0.25);
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
 }
 
 .chart-container.expanded {
   grid-column: 1 / -1;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-color);
+  box-shadow: 0 12px 40px rgba(106, 27, 154, 0.12), 0 0 0 1px var(--brand-purple);
+  border-color: var(--brand-purple);
 }
 
 .chart-header {
@@ -18,29 +46,30 @@
 }
 
 .chart-header h4 {
-  font-size: 1rem;
-  font-weight: 500;
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 600;
   margin-bottom: 0;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .focus-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--brand-purple);
   padding: 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
-  transition: all 0.2s;
+  border-radius: 50%;
+  background: rgba(106, 27, 154, 0.04);
+  border: 1px solid rgba(106, 27, 154, 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .focus-toggle-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: scale(1.05);
+  color: #ffffff;
+  background: var(--brand-gradient);
+  border-color: transparent;
+  transform: scale(1.08);
 }
 
 .chart-wrapper {
@@ -48,8 +77,16 @@
 }
 
 .chart-tooltip {
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: 0.9rem;
-  background: var(--bg-dark) !important;
-  border-color: var(--accent-color) !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--brand-purple) !important;
+  border-radius: 8px;
+  box-shadow: var(--shadow-light);
+}
+
+.chart-tooltip p.label {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
 }

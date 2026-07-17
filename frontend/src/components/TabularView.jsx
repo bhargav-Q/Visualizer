@@ -1,10 +1,12 @@
 import React from 'react';
 import StatsCards from './StatsCards';
 import ChartPanel from './ChartPanel';
+import DataDetailsAccordion from './DataDetailsAccordion';
+import DataTablePreview from './DataTablePreview';
 import './TabularView.css';
 
-const TabularView = ({ tabularData }) => {
-  const { row_count, col_count, numeric_summary, columns, charts } = tabularData;
+const TabularView = ({ tabularData, activeSubTab }) => {
+  const { row_count, col_count, numeric_summary, categorical_summary, columns, preview_rows, charts } = tabularData;
 
   const metrics = [
     { title: "Total Rows", value: row_count.toLocaleString() },
@@ -14,8 +16,23 @@ const TabularView = ({ tabularData }) => {
 
   return (
     <div className="tabular-view">
-      <StatsCards metrics={metrics} />
-      <ChartPanel charts={charts} />
+      {activeSubTab === 'overview' ? (
+        <>
+          <StatsCards metrics={metrics} />
+          <ChartPanel charts={charts} />
+          <DataDetailsAccordion 
+            columns={columns} 
+            numericSummary={numeric_summary} 
+            categoricalSummary={categorical_summary} 
+          />
+        </>
+      ) : (
+        <DataTablePreview 
+          columns={columns} 
+          previewRows={preview_rows} 
+          totalRowCount={row_count} 
+        />
+      )}
     </div>
   );
 };
