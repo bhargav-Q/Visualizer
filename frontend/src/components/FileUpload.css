@@ -1,6 +1,6 @@
 .upload-container {
   width: 100%;
-  max-width: 600px;
+  max-width: 460px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -11,7 +11,7 @@
   position: relative;
   border: 2px dashed rgba(106, 27, 154, 0.2);
   background: var(--bg-card);
-  padding: 56px 24px;
+  padding: 36px 20px;
   text-align: center;
   cursor: pointer;
   border-radius: var(--radius);
