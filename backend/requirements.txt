@@ -5,4 +5,6 @@ openpyxl
 pypdf
 openai
 python-dotenv
-pydantic
+pdfplumber
+pymupdf
+requests
