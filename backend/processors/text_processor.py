@@ -1,9 +1,14 @@
 import os
 import json
+from dotenv import load_dotenv
+from pathlib import Path
 from openai import OpenAI
 from models.schemas import TextResult, KeywordItem
 
-# Get API key from environment
+# Load environment variables (.env in project root or current dir)
+env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
 
 def process_text(raw_text: str, page_count: int = None, paragraph_count: int = None) -> TextResult:
@@ -50,12 +55,13 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
         completion = client.chat.completions.create(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],
-            temperature=1,
+            temperature=0.2,
             top_p=0.95,
-            max_tokens=16384,
-            extra_body={"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}},
+            max_tokens=4096,
+            extra_body={"chat_template_kwargs": {"thinking": False}},
             stream=False,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            timeout=30.0
         )
         
         # Optional: Print reasoning if it exists (for debugging)
@@ -63,7 +69,20 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
         if reasoning:
             print("AI Reasoning:", reasoning)
 
-        response_content = completion.choices[0].message.content
+        response_content = completion.choices[0].message.content or ""
+        
+        # Strip DeepSeek AI <think>...</think> reasoning blocks if present
+        if "<think>" in response_content:
+            if "</think>" in response_content:
+                response_content = response_content.split("</think>")[-1].strip()
+            else:
+                response_content = response_content.split("<think>")[-1].strip()
+
+        start_idx = response_content.find("{")
+        end_idx = response_content.rfind("}")
+        if start_idx != -1 and end_idx != -1:
+            response_content = response_content[start_idx:end_idx+1]
+
         ai_data = json.loads(response_content)
         
         keywords = [

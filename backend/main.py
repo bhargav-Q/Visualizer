@@ -70,20 +70,41 @@ async def upload_file(file: UploadFile = File(...)):
             
     elif filename.endswith(".pdf"):
         try:
+            import concurrent.futures
             from parsers.pdf_parser import parse_pdf
             from processors.text_processor import process_text
+            from processors.ocr_processor import extract_tables_from_pdf
+            
+            # Read file bytes once for both text parsing and table extraction
+            file_bytes = file.file.read()
+            file.file.seek(0)
             
             parsed_data = parse_pdf(file)
-            text_data = process_text(
-                raw_text=parsed_data["text"],
-                page_count=parsed_data["page_count"],
-                paragraph_count=None
-            )
+
+            # Run Text Summary and Table Extraction concurrently in parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                future_text = executor.submit(
+                    process_text,
+                    raw_text=parsed_data["text"],
+                    page_count=parsed_data["page_count"],
+                    paragraph_count=None
+                )
+                future_table = executor.submit(extract_tables_from_pdf, file_bytes)
+
+                text_data = future_text.result()
+                raw_table = future_table.result()
+
+            tabular_data = None
+            data_category = "text"
+            if raw_table and raw_table.get("rows"):
+                tabular_data = process_tabular_data(raw_table)
+                data_category = "mixed"
+
             return UploadResponse(
                 file_name=file.filename,
                 file_type="pdf",
-                data_category="text",
-                tabular=None,
+                data_category=data_category,
+                tabular=tabular_data,
                 text=text_data
             )
         except Exception as e:

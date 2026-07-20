@@ -10,18 +10,39 @@ def process_tabular_data(raw_data) -> TabularResult:
     Processes raw tabular data (headers and rows) into a TabularResult using pure Python,
     completely avoiding pandas/numpy to bypass AppLocker native extension blocks.
     """
-    headers = raw_data.get("headers", [])
+    raw_headers = raw_data.get("headers", [])
     rows = raw_data.get("rows", [])
+
+    # Deduplicate and sanitize headers
+    headers = []
+    seen = {}
+    for idx, h in enumerate(raw_headers):
+        clean_h = str(h).strip().replace("\n", " ") if h else f"Column_{idx+1}"
+        if clean_h in seen:
+            seen[clean_h] += 1
+            headers.append(f"{clean_h}_{seen[clean_h]}")
+        else:
+            seen[clean_h] = 1
+            headers.append(clean_h)
     
     # 1. Dimensions
     row_count = len(rows)
     col_count = len(headers)
     
-    # Extract columns into lists for easier vertical processing
+    # Extract columns into lists for easier vertical processing & auto-cast numeric strings
     col_data = {h: [] for h in headers}
     for row in rows:
         for i, h in enumerate(headers):
             val = row[i] if i < len(row) else None
+            if isinstance(val, str):
+                clean_val = val.replace("$", "").replace(",", "").replace("%", "").strip()
+                try:
+                    if "." in clean_val:
+                        val = float(clean_val)
+                    else:
+                        val = int(clean_val)
+                except ValueError:
+                    pass
             col_data[h].append(val)
             
     # Determine basic types by sampling
@@ -33,7 +54,7 @@ def process_tabular_data(raw_data) -> TabularResult:
         else:
             # Check if predominantly numeric
             numeric_count = sum(1 for x in data if isinstance(x, (int, float)))
-            if numeric_count > len(data) * 0.8:
+            if numeric_count >= len(data) * 0.5:
                 col_types[h] = "numeric"
             elif isinstance(data[0], datetime):
                 col_types[h] = "datetime"
@@ -92,11 +113,10 @@ def process_tabular_data(raw_data) -> TabularResult:
         if 2 <= len(unique_vals) <= 30:
             discrete_num_cols.append(col)
 
-    # Filter for low-cardinality categorical columns (between 2 and 20 unique values)
-    # Exclude identifier columns that scale with row count
+    # Filter for low-cardinality categorical columns (between 1 and 50 unique values)
     cat_cols = [
         h for h, summary in categorical_summary.items()
-        if 2 <= summary.unique <= 20 and (row_count <= 10 or summary.unique < row_count * 0.9)
+        if 1 <= summary.unique <= 50
     ]
 
     # Combine string categories and discrete numeric columns as X-axis candidates.
@@ -117,6 +137,9 @@ def process_tabular_data(raw_data) -> TabularResult:
         
     x_axis_cols.sort(key=get_unique_count)
 
+    def sanitize_key(k: str) -> str:
+        return str(k).replace("/", " ").replace(",", " ").replace(".", " ").replace("[", "").replace("]", "").replace("'", "").replace('"', "").strip()
+
     # A. Time Series Line Charts (Up to 2)
     line_charts_count = 0
     for date_col in date_cols:
@@ -126,6 +149,9 @@ def process_tabular_data(raw_data) -> TabularResult:
             if line_charts_count >= 2:
                 break
             
+            clean_date_key = sanitize_key(date_col)
+            clean_num_key = sanitize_key(num_col)
+
             # Group by year-month
             grouped = {}
             for d_val, n_val in zip(col_data[date_col], col_data[num_col]):
@@ -135,13 +161,13 @@ def process_tabular_data(raw_data) -> TabularResult:
             
             if grouped:
                 sorted_months = sorted(grouped.keys())
-                chart_data = [{date_col: m, num_col: grouped[m]} for m in sorted_months]
+                chart_data = [{clean_date_key: m, clean_num_key: grouped[m]} for m in sorted_months]
                 
                 charts.append(ChartData(
                     type="line",
-                    title=f"Total {num_col} over Time",
-                    x_key=date_col,
-                    y_key=num_col,
+                    title=f"Total {clean_num_key} over Time",
+                    x_key=clean_date_key,
+                    y_key=clean_num_key,
                     data=chart_data
                 ))
                 line_charts_count += 1
@@ -159,6 +185,9 @@ def process_tabular_data(raw_data) -> TabularResult:
             if x_col == num_col:
                 continue
             
+            clean_x_key = sanitize_key(x_col)
+            clean_num_key = sanitize_key(num_col)
+
             # Group by category, compute average
             grouped = {}
             counts = {}
@@ -179,13 +208,13 @@ def process_tabular_data(raw_data) -> TabularResult:
                 # Take top 10 categories to avoid visual clutter
                 top_categories = sorted_categories[:10]
                 
-                chart_data = [{x_col: k, num_col: v} for k, v in top_categories]
+                chart_data = [{clean_x_key: k, clean_num_key: v} for k, v in top_categories]
                 
                 charts.append(ChartData(
                     type="bar",
-                    title=f"Average {num_col} by {x_col}",
-                    x_key=x_col,
-                    y_key=num_col,
+                    title=f"Average {clean_num_key} by {clean_x_key}",
+                    x_key=clean_x_key,
+                    y_key=clean_num_key,
                     data=chart_data
                 ))
                 bar_charts_count += 1
@@ -193,18 +222,19 @@ def process_tabular_data(raw_data) -> TabularResult:
     # C. Row Index Fallback: If no charts generated at all but numeric columns exist
     if not charts and num_cols:
         for num_col in num_cols[:2]:
+            clean_num_key = sanitize_key(num_col)
             chart_data = []
             # Plot first 100 values against sequential row indices
             for idx, val in enumerate(col_data[num_col][:100]):
                 if val is not None and isinstance(val, (int, float)):
-                    chart_data.append({"Row Index": idx + 1, num_col: float(val)})
+                    chart_data.append({"Row Index": idx + 1, clean_num_key: float(val)})
             
             if chart_data:
                 charts.append(ChartData(
                     type="line",
-                    title=f"{num_col} Values by Row Index",
+                    title=f"{clean_num_key} Values by Row Index",
                     x_key="Row Index",
-                    y_key=num_col,
+                    y_key=clean_num_key,
                     data=chart_data
                 ))
 
@@ -217,7 +247,9 @@ def process_tabular_data(raw_data) -> TabularResult:
                 serialized_row.append(val.isoformat())
             else:
                 serialized_row.append(val)
-        preview_rows.append(serialized_row)
+        while len(serialized_row) < col_count:
+            serialized_row.append(None)
+        preview_rows.append(serialized_row[:col_count])
 
     return TabularResult(
         columns=columns,
