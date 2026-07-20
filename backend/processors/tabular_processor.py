@@ -208,8 +208,20 @@ def process_tabular_data(raw_data) -> TabularResult:
                     data=chart_data
                 ))
 
+    # 4. Preview rows (first 100 rows, serialized for JSON)
+    preview_rows = []
+    for row in rows[:100]:
+        serialized_row = []
+        for val in row:
+            if isinstance(val, datetime):
+                serialized_row.append(val.isoformat())
+            else:
+                serialized_row.append(val)
+        preview_rows.append(serialized_row)
+
     return TabularResult(
         columns=columns,
+        preview_rows=preview_rows,
         row_count=row_count,
         col_count=col_count,
         numeric_summary=numeric_summary,

@@ -29,6 +29,7 @@ class ChartData(BaseModel):
 
 class TabularResult(BaseModel):
     columns: List[ColumnInfo]
+    preview_rows: List[List[Any]]
     row_count: int
     col_count: int
     numeric_summary: Dict[str, NumericSummary]
