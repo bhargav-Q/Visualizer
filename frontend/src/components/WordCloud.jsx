@@ -18,8 +18,9 @@ const WordCloud = ({ keywords }) => {
         <div className="wordcloud-wrapper custom-cloud">
           {keywords && keywords.length > 0 ? (
             keywords.map((kw, idx) => {
+              const normScore = kw.score > 1 ? kw.score / 100 : (kw.score || 0);
               // Scale score (0.0 to 1.0) to font size (16px to 54px)
-              const fontSize = 16 + (kw.score * 38);
+              const fontSize = 16 + (normScore * 38);
               const color = colors[idx % colors.length];
               
               return (
@@ -31,7 +32,7 @@ const WordCloud = ({ keywords }) => {
                     padding: '8px',
                     fontWeight: 600,
                     lineHeight: 1.1,
-                    opacity: 0.75 + (kw.score * 0.25)
+                    opacity: 0.75 + (normScore * 0.25)
                   }}
                   className="cloud-word"
                 >
@@ -46,11 +47,14 @@ const WordCloud = ({ keywords }) => {
       </ErrorBoundary>
       
       <div className="keyword-tags">
-        {keywords && keywords.slice(0, 10).map((kw, idx) => (
-          <span key={idx} className="keyword-tag">
-            {kw.word} <span className="score">{(kw.score * 100).toFixed(0)}%</span>
-          </span>
-        ))}
+        {keywords && keywords.slice(0, 10).map((kw, idx) => {
+          const normScore = kw.score > 1 ? kw.score / 100 : (kw.score || 0);
+          return (
+            <span key={idx} className="keyword-tag">
+              {kw.word} <span className="score">{(normScore * 100).toFixed(0)}%</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );

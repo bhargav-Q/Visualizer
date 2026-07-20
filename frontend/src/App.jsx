@@ -3,6 +3,7 @@ import { Activity, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
 import axios from 'axios';
 import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 function App() {
@@ -103,13 +104,15 @@ function App() {
         )}
 
         {data && (
-          <Dashboard 
-            data={data} 
-            onReset={() => {
-              setData(null);
-              setError(null);
-            }} 
-          />
+          <ErrorBoundary>
+            <Dashboard 
+              data={data} 
+              onReset={() => {
+                setData(null);
+                setError(null);
+              }} 
+            />
+          </ErrorBoundary>
         )}
       </main>
     </div>

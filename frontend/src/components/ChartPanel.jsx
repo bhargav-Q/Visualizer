@@ -12,9 +12,10 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const dataName = payload[0].name;
     const value = payload[0].value;
+    const formattedVal = (typeof value === 'number') ? value.toLocaleString() : (value ?? 'N/A');
     return (
       <div className="chart-tooltip">
-        <p className="label">{label ? `${label}` : `${dataName}`}: {value.toLocaleString()}</p>
+        <p className="label">{label ? `${label}` : `${dataName}`}: {formattedVal}</p>
       </div>
     );
   }
@@ -54,7 +55,7 @@ const ChartPanel = ({ charts }) => {
                 </button>
               </div>
               <div className="chart-wrapper">
-                <ResponsiveContainer width="100%" height={isExpanded ? 450 : 300}>
+                <ResponsiveContainer width="99%" height={isExpanded ? 450 : 320} minHeight={300}>
                   {chart.type === 'bar' ? (
                     <BarChart data={chart.data} margin={{ top: 20, right: 30, left: 35, bottom: 25 }}>
                       <defs>

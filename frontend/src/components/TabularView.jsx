@@ -6,10 +6,11 @@ import DataTablePreview from './DataTablePreview';
 import './TabularView.css';
 
 const TabularView = ({ tabularData, activeSubTab }) => {
-  const { row_count, col_count, numeric_summary, categorical_summary, columns, preview_rows, charts } = tabularData;
+  if (!tabularData) return null;
+  const { row_count = 0, col_count = 0, numeric_summary, categorical_summary, columns, preview_rows, charts } = tabularData;
 
   const metrics = [
-    { title: "Total Rows", value: row_count.toLocaleString() },
+    { title: "Total Rows", value: row_count?.toLocaleString() || 0 },
     { title: "Total Columns", value: col_count },
     { title: "Numeric Columns", value: Object.keys(numeric_summary || {}).length }
   ];
@@ -20,11 +21,11 @@ const TabularView = ({ tabularData, activeSubTab }) => {
         <>
           <StatsCards metrics={metrics} />
           <ChartPanel charts={charts} />
-          <DataDetailsAccordion 
+          {/* <DataDetailsAccordion 
             columns={columns} 
             numericSummary={numeric_summary} 
             categoricalSummary={categorical_summary} 
-          />
+          /> */}
         </>
       ) : (
         <DataTablePreview 

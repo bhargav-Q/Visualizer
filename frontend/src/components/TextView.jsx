@@ -5,6 +5,7 @@ import StatsCards from './StatsCards';
 import './TextView.css';
 
 const TextView = ({ textData, activeSubTab }) => {
+  if (!textData) return null;
   const { summary, keywords, word_count, page_count, paragraph_count, ai_model } = textData;
 
   const metrics = [

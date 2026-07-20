@@ -44,7 +44,7 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
           <tbody>
             {paginatedRows.map((row, rowIdx) => (
               <tr key={rowIdx}>
-                {row.map((cell, cellIdx) => {
+                {Array.isArray(row) ? row.map((cell, cellIdx) => {
                   let displayVal = cell;
                   if (cell === null || cell === undefined) {
                     displayVal = <span className="null-val">NaN</span>;
@@ -54,7 +54,7 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
                     displayVal = cell ? 'True' : 'False';
                   }
                   return <td key={cellIdx}>{displayVal}</td>;
-                })}
+                }) : <td>{String(row)}</td>}
               </tr>
             ))}
           </tbody>
