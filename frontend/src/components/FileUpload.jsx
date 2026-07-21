@@ -2,14 +2,24 @@ import React, { useState, useRef } from 'react';
 import { UploadCloud, File, AlertCircle, CheckCircle2 } from 'lucide-react';
 import './FileUpload.css';
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
+const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
 const ALLOWED_TYPES = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'application/pdf': '.pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
   'text/csv': '.csv',
-  'application/vnd.ms-excel': '.csv'
+  'application/vnd.ms-excel': '.csv',
+  'text/plain': '.txt',
+  'text/markdown': '.md',
+  'application/rtf': '.rtf',
+  'text/rtf': '.rtf',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/tiff': '.tiff'
 };
+const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.pdf', '.docx', '.doc', '.txt', '.md', '.rtf', '.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif'];
 
 const FileUpload = ({ onFileSelect }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -34,19 +44,19 @@ const FileUpload = ({ onFileSelect }) => {
 
     // Check size
     if (selectedFile.size > MAX_FILE_SIZE) {
-      setError(`File is too large. Maximum size is 15MB.`);
+      setError(`File is too large. Maximum size is 16MB.`);
       return false;
     }
 
     // Check type by extension as fallback
     const ext = '.' + selectedFile.name.split('.').pop().toLowerCase();
-    const isAllowedExt = ['.xlsx', '.pdf', '.docx', '.csv'].includes(ext);
+    const isAllowedExt = ALLOWED_EXTENSIONS.includes(ext);
     
     // Check type by mime type
     const isAllowedMime = Object.keys(ALLOWED_TYPES).includes(selectedFile.type);
 
     if (!isAllowedExt && !isAllowedMime) {
-      setError(`Unsupported file type. Please upload a .xlsx, .pdf, .docx, or .csv file.`);
+      setError(`Unsupported file type. Please upload a supported document, image, or spreadsheet.`);
       return false;
     }
 
@@ -96,7 +106,7 @@ const FileUpload = ({ onFileSelect }) => {
           type="file"
           ref={fileInputRef}
           onChange={handleFileInput}
-          accept=".xlsx,.pdf,.docx,.csv"
+          accept=".xlsx,.csv,.pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp,.tiff,.tif"
           className="hidden-input"
         />
         
@@ -126,10 +136,11 @@ const FileUpload = ({ onFileSelect }) => {
             <h3>Drag & Drop your file here</h3>
             <p>or click to browse from your computer</p>
             <div className="file-badges">
-              <span className="format-badge xlsx">XLSX</span>
+              <span className="format-badge xlsx">XLSX / CSV</span>
               <span className="format-badge pdf">PDF</span>
-              <span className="format-badge docx">DOCX</span>
-              <span className="format-badge csv">CSV</span>
+              <span className="format-badge docx">DOCX / DOC</span>
+              <span className="format-badge txt">TXT / MD</span>
+              <span className="format-badge img">IMG / SCAN</span>
             </div>
           </div>
         )}

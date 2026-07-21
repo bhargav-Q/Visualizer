@@ -109,6 +109,19 @@
   color: var(--color-meeting-intelligence);
 }
 
+.format-badge.txt {
+  background: var(--badge-lead-nurturing);
+  border-color: rgba(13, 148, 136, 0.15);
+  color: var(--color-lead-nurturing);
+}
+
+.format-badge.img {
+  background: rgba(147, 51, 234, 0.1);
+  border-color: rgba(147, 51, 234, 0.2);
+  color: var(--brand-purple);
+}
+
+
 .pulse-animation {
   animation: pulse 2s infinite;
 }
