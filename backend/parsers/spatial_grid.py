@@ -84,8 +84,9 @@ def reconstruct_grid_from_ocr(ocr_results, y_tolerance_ratio=0.6):
 
 def run_ocr_with_orientation_check(page, ocr_engine, dpi=150):
     """
-    Patch B: Test 0°, 90°, 180°, 270° orientation angles if page is rotated,
-    returning the OCR results with the highest confidence and token count.
+    Patch B: Test 0°, 90°, 270°, 180° orientation angles to detect sideways rotated
+    scanned pages or embedded spreadsheet images inside PDF containers, returning
+    the OCR results that maximize horizontal tabular grid structure.
     """
     if ocr_engine is None:
         return []
@@ -93,7 +94,8 @@ def run_ocr_with_orientation_check(page, ocr_engine, dpi=150):
     best_results = []
     best_score = -1.0
 
-    angles = [0, 90, 180, 270] if page.rotation != 0 else [0]
+    # Always test all 4 rotation angles to detect rotated image attachments inside PDFs
+    angles = [0, 90, 270, 180]
 
     for angle in angles:
         try:
@@ -101,9 +103,19 @@ def run_ocr_with_orientation_check(page, ocr_engine, dpi=150):
             pix = page.get_pixmap(dpi=dpi, matrix=matrix) if matrix else page.get_pixmap(dpi=dpi)
             results, _ = ocr_engine(pix.tobytes("png"))
             if results:
-                score = sum(float(r[2]) for r in results) * len(results)
-                if score > best_score:
-                    best_score = score
+                grid_rows, _ = reconstruct_grid_from_ocr(results)
+                row_count = len(grid_rows)
+                avg_cols = sum(len(r) for r in grid_rows) / row_count if row_count > 0 else 0
+                confidence_sum = sum(float(r[2]) for r in results)
+                
+                # Higher score given to horizontal table structures (clean row count with <= 30 columns per row)
+                if 2 <= avg_cols <= 30:
+                    structured_score = (row_count * 100.0) + confidence_sum
+                else:
+                    structured_score = row_count + confidence_sum
+                
+                if structured_score > best_score:
+                    best_score = structured_score
                     best_results = results
         except Exception as e:
             logger.warning(f"Orientation OCR check error at {angle}°: {e}")
