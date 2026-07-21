@@ -5,7 +5,12 @@ import logging
 
 from models.schemas import UploadResponse
 from parsers.xlsx_parser import parse_xlsx
+from parsers.pdf_parser import parse_pdf
+from parsers.docx_parser import parse_docx
+from parsers.txt_parser import parse_txt
 from processors.tabular_processor import process_tabular_data
+from processors.text_processor import process_text
+from processors.ocr_processor import extract_tables_from_text, parse_tsv_grid
 
 # Suppress harmless pdfminer warnings about fonts
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
@@ -89,10 +94,15 @@ async def upload_file(file: UploadFile = File(...)):
                     page_count=parsed_data["page_count"],
                     paragraph_count=None
                 )
-                future_table = executor.submit(extract_tables_from_pdf, file_bytes)
+                future_table = executor.submit(extract_tables_from_text, parsed_data["text"])
 
                 text_data = future_text.result()
                 raw_table = future_table.result()
+
+            # Gap 2 Fix: Deterministic TSV Table Fallback Backstop
+            if not raw_table or not raw_table.get("rows"):
+                from processors.ocr_processor import parse_tsv_grid
+                raw_table = parse_tsv_grid(parsed_data.get("structured_tsv") or parsed_data["text"])
 
             tabular_data = None
             data_category = "text"

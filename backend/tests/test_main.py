@@ -22,15 +22,17 @@ def test_upload_file_too_large(client, mocker):
 def test_upload_valid_pdf_endpoint(client, mocker):
     """Test uploading a valid PDF, mocking the internal parsers to avoid API calls."""
     # Mock the parser and processor
-    mocker.patch("parsers.pdf_parser.parse_pdf", return_value={"text": "Mocked PDF text", "page_count": 1})
-    mocker.patch("processors.text_processor.process_text", return_value={
-        "word_count": 3,
-        "page_count": 1,
-        "paragraph_count": 1,
-        "summary": "Mocked summary",
-        "keywords": [{"word": "mock", "score": 1.0}],
-        "ai_model": "test-mock"
-    })
+    from models.schemas import TextResult, KeywordItem
+    mocker.patch("main.parse_pdf", return_value={"text": "Mocked PDF text", "page_count": 1, "structured_tsv": ""})
+    mocker.patch("main.extract_tables_from_text", return_value=None)
+    mocker.patch("main.process_text", return_value=TextResult(
+        word_count=3,
+        page_count=1,
+        paragraph_count=1,
+        summary="Mocked summary",
+        keywords=[KeywordItem(word="mock", score=1.0)],
+        ai_model="test-mock"
+    ))
     
     file_content = b"Fake PDF binary"
     files = {"file": ("test.pdf", file_content, "application/pdf")}
