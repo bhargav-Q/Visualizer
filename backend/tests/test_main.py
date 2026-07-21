@@ -2,22 +2,17 @@ import pytest
 from io import BytesIO
 
 def test_upload_invalid_file_type(client):
-    """Test that a .txt file is rejected."""
-    file_content = b"Some text data"
-    files = {"file": ("test.txt", file_content, "text/plain")}
+    """Test that an unsupported file type (.exe) is rejected."""
+    file_content = b"Some binary executable data"
+    files = {"file": ("test.exe", file_content, "application/octet-stream")}
     response = client.post("/api/upload", files=files)
     
     assert response.status_code == 400
     assert "Unsupported file type" in response.json()["detail"]
 
 def test_upload_file_too_large(client, mocker):
-    """Test that a >15MB file is rejected."""
-    # We can fake the size check by mocking the seek/tell mechanism in main.py
-    # or just create a 16MB string in memory (might be slow but it's fine)
-    # Actually, main.py checks `file.file.seek(0, 2)` then `file.file.tell()`
-    # Let's mock `fastapi.UploadFile` file size or just send 15MB + 1 byte
-    
-    large_content = b"0" * (15 * 1024 * 1024 + 1)
+    """Test that a >16MB file is rejected."""
+    large_content = b"0" * (16 * 1024 * 1024 + 1)
     files = {"file": ("large.pdf", large_content, "application/pdf")}
     response = client.post("/api/upload", files=files)
     

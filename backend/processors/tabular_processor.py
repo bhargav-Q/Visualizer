@@ -113,10 +113,10 @@ def process_tabular_data(raw_data) -> TabularResult:
         if 2 <= len(unique_vals) <= 30:
             discrete_num_cols.append(col)
 
-    # Filter for low-cardinality categorical columns (between 1 and 50 unique values)
+    # Filter for low-cardinality categorical columns (between 1 and 50 unique values, and not high-cardinality ID columns)
     cat_cols = [
         h for h, summary in categorical_summary.items()
-        if 1 <= summary.unique <= 50
+        if 1 <= summary.unique <= 50 and (row_count <= 10 or summary.unique < row_count * 0.9)
     ]
 
     # Combine string categories and discrete numeric columns as X-axis candidates.
