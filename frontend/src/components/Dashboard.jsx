@@ -53,6 +53,11 @@ const Dashboard = ({ data, onReset }) => {
               Tables Detected
             </span>
           )}
+          {data.processing_time !== undefined && data.processing_time !== null && (
+            <span className="badge-type badge-time" title="Total API & OCR Processing Time">
+              ⏱️ {data.processing_time}s
+            </span>
+          )}
         </div>
       </div>
 
@@ -128,7 +133,7 @@ const Dashboard = ({ data, onReset }) => {
         )}
 
         {(isTextOnly || isMixed) && data.text && (currentTab === 'summary' || currentTab === 'keywords') && (
-          <TextView textData={data.text} activeSubTab={currentTab} />
+          <TextView textData={data.text} activeSubTab={currentTab} processingTime={data.processing_time} />
         )}
       </div>
     </div>

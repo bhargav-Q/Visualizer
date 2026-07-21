@@ -4,7 +4,7 @@ import WordCloud from './WordCloud';
 import StatsCards from './StatsCards';
 import './TextView.css';
 
-const TextView = ({ textData, activeSubTab }) => {
+const TextView = ({ textData, activeSubTab, processingTime }) => {
   if (!textData) return null;
   const { summary, keywords, word_count, page_count, paragraph_count, ai_model } = textData;
 
@@ -18,6 +18,10 @@ const TextView = ({ textData, activeSubTab }) => {
 
   if (paragraph_count !== null && paragraph_count !== undefined) {
     metrics.push({ title: "Paragraphs", value: paragraph_count });
+  }
+
+  if (processingTime !== null && processingTime !== undefined) {
+    metrics.push({ title: "Processing Time", value: `${processingTime}s` });
   }
 
   return (

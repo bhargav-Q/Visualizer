@@ -138,7 +138,7 @@
 
 .logo-text {
   font-family: 'Newsreader', Georgia, serif;
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   background: var(--brand-gradient);
@@ -172,11 +172,10 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  padding: 0;
-  cursor: pointer;
+  border: 1px solid var(--card-border);
   background: var(--bg-card);
-  border: 1px solid rgba(106, 27, 154, 0.15);
   color: var(--brand-purple);
+  cursor: pointer;
   box-shadow: var(--shadow-light);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -193,7 +192,8 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  margin-top: 80px;
+  margin-top: 115px;
+  padding-bottom: 40px;
 }
 
 .placeholder-hero {
@@ -206,19 +206,21 @@
 
 .placeholder-hero h3 {
   font-family: 'Newsreader', Georgia, serif;
-  font-size: 2.3rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   letter-spacing: -0.01em;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .placeholder-hero p {
+  font-family: 'Work Sans', sans-serif;
   color: var(--text-secondary);
-  font-size: 1.1rem;
-  max-width: 500px;
-  margin: 0 auto 20px auto;
+  font-size: 1.05rem;
+  font-weight: 500;
+  max-width: 550px;
+  margin: 0 auto 24px auto;
 }
 
 .flex-col-center {
@@ -289,4 +291,159 @@
   border-radius: var(--radius);
   color: var(--color-crm-tips);
   margin-top: 24px;
+}
+
+/* Two Column Hero Layout */
+.hero-two-column {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 40px;
+  align-items: center;
+  width: 100%;
+  max-width: 1140px;
+  margin: 16px auto 0 auto;
+}
+
+@media (max-width: 960px) {
+  .hero-two-column {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+}
+
+.hero-left-col {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+@media (max-width: 960px) {
+  .hero-left-col {
+    text-align: center;
+    align-items: center;
+  }
+}
+
+.hero-title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.015em;
+  line-height: 1.18;
+}
+
+.hero-subtitle {
+  font-family: 'Work Sans', sans-serif;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.hero-right-col {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Capabilities Showcase Section */
+.capabilities-showcase {
+  margin-top: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.capabilities-title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+.capabilities-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 550px) {
+  .capabilities-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.capability-card {
+  background: var(--bg-card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-light);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.capability-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(106, 27, 154, 0.25);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.capability-icon-wrapper {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.capability-card.tabular .capability-icon-wrapper {
+  background: var(--badge-sales-strategy);
+}
+
+.capability-card.text .capability-icon-wrapper {
+  background: var(--badge-ai-sales);
+}
+
+.capability-card.ocr .capability-icon-wrapper {
+  background: var(--badge-crm-tips);
+}
+
+.capability-card.mixed .capability-icon-wrapper {
+  background: var(--badge-meeting-intelligence);
+}
+
+.capability-card h5 {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+}
+
+.capability-formats {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--brand-purple);
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+}
+
+.capability-desc {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
 }

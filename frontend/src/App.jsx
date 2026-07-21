@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
+import { Activity, Loader2, AlertCircle, Sun, Moon, BarChart2, FileText, Image, Layers } from 'lucide-react';
 import axios from 'axios';
 import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
@@ -80,10 +80,40 @@ function App() {
       {/* Main Content Area */}
       <main className="main-content animate-fade-in">
         {!isLoading && !data && (
-          <div className="placeholder-hero">
-            <h3>Upload a File to Begin</h3>
-            <p>We support .xlsx, .pdf, .docx, and .csv up to 15MB.</p>
-            <FileUpload onFileSelect={handleFileSelect} />
+          <div className="hero-two-column">
+            {/* Left Column: Title, Subtitle & Capability Cards */}
+            <div className="hero-left-col">
+              <h2 className="hero-title">Upload a File to Begin</h2>
+              <p className="hero-subtitle">We support spreadsheets (.xlsx, .csv) and document files (.pdf, .docx, .txt) up to 16MB.</p>
+
+              <div className="capabilities-showcase">
+                <h4 className="capabilities-title">What You Can Visualize</h4>
+                <div className="capabilities-grid-2col">
+                  <div className="capability-card tabular">
+                    <div className="capability-icon-wrapper">
+                      <BarChart2 size={20} color="var(--color-sales-strategy)" />
+                    </div>
+                    <h5>Sales & Financial Data</h5>
+                    <p className="capability-formats">.XLSX &bull; .CSV</p>
+                    <p className="capability-desc">Automated Bar, Line & Pie charts with column statistics.</p>
+                  </div>
+
+                  <div className="capability-card text">
+                    <div className="capability-icon-wrapper">
+                      <FileText size={20} color="var(--color-ai-sales)" />
+                    </div>
+                    <h5>Document Summaries</h5>
+                    <p className="capability-formats">.PDF &bull; .DOCX &bull; .TXT</p>
+                    <p className="capability-desc">Executive AI TL;DR summary & top keyword cloud.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Drag & Drop File Upload Box */}
+            <div className="hero-right-col">
+              <FileUpload onFileSelect={handleFileSelect} />
+            </div>
           </div>
         )}
 

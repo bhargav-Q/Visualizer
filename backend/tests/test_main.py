@@ -21,10 +21,11 @@ def test_upload_file_too_large(client, mocker):
 
 def test_upload_valid_pdf_endpoint(client, mocker):
     """Test uploading a valid PDF, mocking the internal parsers to avoid API calls."""
-    # Mock the parser and processor
     from models.schemas import TextResult, KeywordItem
+    
     mocker.patch("main.parse_pdf", return_value={"text": "Mocked PDF text", "page_count": 1, "structured_tsv": ""})
     mocker.patch("main.extract_tables_from_text", return_value=None)
+    mocker.patch("main.parse_tsv_grid", return_value=None)
     mocker.patch("main.process_text", return_value=TextResult(
         word_count=3,
         page_count=1,
@@ -34,10 +35,13 @@ def test_upload_valid_pdf_endpoint(client, mocker):
         ai_model="test-mock"
     ))
     
-    file_content = b"Fake PDF binary"
+    file_content = b"%PDF-1.4 Mock PDF Stream %%EOF"
     files = {"file": ("test.pdf", file_content, "application/pdf")}
     response = client.post("/api/upload", files=files)
     
+    if response.status_code != 200:
+        print("TEST ERROR DETAIL:", response.json())
+        
     assert response.status_code == 200
     data = response.json()
     assert data["data_category"] == "text"

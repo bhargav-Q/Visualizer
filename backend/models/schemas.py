@@ -54,3 +54,4 @@ class UploadResponse(BaseModel):
     data_category: str
     tabular: Optional[TabularResult] = None
     text: Optional[TextResult] = None
+    processing_time: Optional[float] = None

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import time
 import logging
 
 from models.schemas import UploadResponse
@@ -8,6 +9,7 @@ from parsers.xlsx_parser import parse_xlsx
 from parsers.pdf_parser import parse_pdf
 from parsers.docx_parser import parse_docx
 from parsers.txt_parser import parse_txt
+from parsers.image_parser import parse_image
 from processors.tabular_processor import process_tabular_data
 from processors.text_processor import process_text
 from processors.ocr_processor import extract_tables_from_text, parse_tsv_grid
@@ -31,6 +33,7 @@ app.add_middleware(
 
 @app.post("/api/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...)):
+    start_time = time.time()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
         
@@ -53,7 +56,8 @@ async def upload_file(file: UploadFile = File(...)):
                 file_type="xlsx",
                 data_category="tabular",
                 tabular=tabular_data,
-                text=None
+                text=None,
+                processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
@@ -68,7 +72,8 @@ async def upload_file(file: UploadFile = File(...)):
                 file_type="csv",
                 data_category="tabular",
                 tabular=tabular_data,
-                text=None
+                text=None,
+                processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
@@ -76,10 +81,6 @@ async def upload_file(file: UploadFile = File(...)):
     elif filename.endswith(".pdf"):
         try:
             import concurrent.futures
-            from parsers.pdf_parser import parse_pdf
-            from processors.text_processor import process_text
-            from processors.ocr_processor import extract_tables_from_pdf
-            
             # Read file bytes once for both text parsing and table extraction
             file_bytes = file.file.read()
             file.file.seek(0)
@@ -115,7 +116,8 @@ async def upload_file(file: UploadFile = File(...)):
                 file_type="pdf",
                 data_category=data_category,
                 tabular=tabular_data,
-                text=text_data
+                text=text_data,
+                processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
@@ -123,9 +125,6 @@ async def upload_file(file: UploadFile = File(...)):
     elif filename.endswith((".docx", ".doc")):
         try:
             import concurrent.futures
-            from parsers.docx_parser import parse_docx
-            from processors.text_processor import process_text
-            from processors.ocr_processor import extract_tables_from_text
             
             parsed_data = parse_docx(file)
             raw_text = parsed_data.get("text", "")
@@ -156,17 +155,15 @@ async def upload_file(file: UploadFile = File(...)):
                 file_type=file_ext,
                 data_category=data_category,
                 tabular=tabular_data,
-                text=text_data
+                text=text_data,
+                processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
 
-    elif filename.endswith((".txt", ".md", ".rtf")):
+    elif filename.endswith(".txt"):
         try:
             import concurrent.futures
-            from parsers.txt_parser import parse_txt
-            from processors.text_processor import process_text
-            from processors.ocr_processor import extract_tables_from_text
 
             parsed_data = parse_txt(file)
             raw_text = parsed_data.get("text", "")
@@ -196,55 +193,16 @@ async def upload_file(file: UploadFile = File(...)):
                 file_type=file_ext,
                 data_category=data_category,
                 tabular=tabular_data,
-                text=text_data
+                text=text_data,
+                processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. Error: {str(e)}")
 
-    elif filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif")):
-        try:
-            import concurrent.futures
-            from parsers.image_parser import parse_image
-            from processors.text_processor import process_text
-            from processors.ocr_processor import extract_tables_from_text
-
-            parsed_data = parse_image(file)
-            raw_text = parsed_data.get("text", "")
-            page_count = parsed_data.get("page_count", 1)
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                future_text = executor.submit(
-                    process_text,
-                    raw_text=raw_text if raw_text else "Image document uploaded for analysis.",
-                    page_count=page_count,
-                    paragraph_count=None
-                )
-                future_table = executor.submit(extract_tables_from_text, raw_text)
-
-                text_data = future_text.result()
-                raw_table = future_table.result()
-
-            tabular_data = None
-            data_category = "text"
-            if raw_table and raw_table.get("rows"):
-                tabular_data = process_tabular_data(raw_table)
-                data_category = "mixed"
-
-            file_ext = filename.split(".")[-1].lower()
-            return UploadResponse(
-                file_name=file.filename,
-                file_type=file_ext,
-                data_category=data_category,
-                tabular=tabular_data,
-                text=text_data
-            )
-        except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Could not parse image file. Error: {str(e)}")
-
     else:
         raise HTTPException(
             status_code=400,
-            detail="Unsupported file type. Allowed: .xlsx, .csv, .pdf, .docx, .doc, .txt, .md, .rtf, .png, .jpg, .jpeg, .webp, .tiff"
+            detail="Unsupported file type. Allowed formats: .xlsx, .csv, .pdf, .docx, .doc, .txt"
         )
 
 

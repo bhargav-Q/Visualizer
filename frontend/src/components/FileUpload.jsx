@@ -10,16 +10,9 @@ const ALLOWED_TYPES = {
   'application/msword': '.doc',
   'text/csv': '.csv',
   'application/vnd.ms-excel': '.csv',
-  'text/plain': '.txt',
-  'text/markdown': '.md',
-  'application/rtf': '.rtf',
-  'text/rtf': '.rtf',
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/webp': '.webp',
-  'image/tiff': '.tiff'
+  'text/plain': '.txt'
 };
-const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.pdf', '.docx', '.doc', '.txt', '.md', '.rtf', '.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif'];
+const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.pdf', '.docx', '.doc', '.txt'];
 
 const FileUpload = ({ onFileSelect }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -106,7 +99,7 @@ const FileUpload = ({ onFileSelect }) => {
           type="file"
           ref={fileInputRef}
           onChange={handleFileInput}
-          accept=".xlsx,.csv,.pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp,.tiff,.tif"
+          accept=".xlsx,.csv,.pdf,.docx,.doc,.txt"
           className="hidden-input"
         />
         
@@ -139,8 +132,7 @@ const FileUpload = ({ onFileSelect }) => {
               <span className="format-badge xlsx">XLSX / CSV</span>
               <span className="format-badge pdf">PDF</span>
               <span className="format-badge docx">DOCX / DOC</span>
-              <span className="format-badge txt">TXT / MD</span>
-              <span className="format-badge img">IMG / SCAN</span>
+              <span className="format-badge txt">TXT</span>
             </div>
           </div>
         )}
