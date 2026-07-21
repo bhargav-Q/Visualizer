@@ -13,36 +13,29 @@ load_dotenv(dotenv_path=env_path)
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
 
-def extract_tables_from_pdf(file_bytes: bytes) -> dict | None:
+def extract_tables_from_text(raw_text: str) -> dict | None:
     """
     Pure Prompt-Based DeepSeek AI Table Extractor.
-    Reads document text via PyMuPDF and uses deepseek-ai/deepseek-v4-flash
+    Takes document/image text and uses deepseek-ai/deepseek-v4-flash
     to extract, resolve headers, clean numbers, and return structured table JSON.
     """
-    import pymupdf
     from openai import OpenAI
 
     if not api_key:
         logger.warning("NVIDIA_API_KEY missing — cannot run DeepSeek AI table extraction")
         return None
 
-    try:
-        # Extract text from PDF in-memory
-        doc = pymupdf.open(stream=file_bytes, filetype="pdf")
-        full_text = ""
-        for page in doc:
-            full_text += page.get_text() + "\n"
-        
-        if not full_text.strip():
-            logger.info("No text content found in PDF.")
-            return None
+    if not raw_text or not raw_text.strip():
+        logger.info("No text content provided for table extraction.")
+        return None
 
+    try:
         client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=api_key
         )
 
-        prompt = f"""You are an expert tabular data extraction system. Analyze the following full multi-page document text and extract ALL structured tables, claims lists, loss-run reports, rating worksheets, payroll breakdowns, or invoice schedules across ALL pages into a single combined JSON table.
+        prompt = f"""You are an expert tabular data extraction system. Analyze the following document or image text and extract ALL structured tables, claims lists, loss-run reports, rating worksheets, payroll breakdowns, or invoice schedules across ALL pages into a single combined JSON table.
 
 Return ONLY valid JSON matching this exact structure:
 {{
@@ -65,8 +58,8 @@ Rules:
 - If 2 or more rows of structured or tabular data are found anywhere in the document, set "has_table": true.
 - ONLY return "has_table": false if the entire document is purely unstructured narrative text with zero lists/tables.
 
-Document Text (All Pages):
-{full_text[:25000]}"""
+Document Text:
+{raw_text[:25000]}"""
 
         logger.info("Sending document text to DeepSeek AI for table extraction...")
         completion = client.chat.completions.create(
@@ -86,7 +79,6 @@ Document Text (All Pages):
             if "</think>" in content:
                 content = content.split("</think>")[-1].strip()
             else:
-                # If thinking wasn't closed properly
                 content = content.split("<think>")[-1].strip()
 
         # Extract pure JSON string between first '{' and last '}'
@@ -107,3 +99,19 @@ Document Text (All Pages):
         logger.warning(f"DeepSeek AI table extraction error: {e}")
 
     return None
+
+def extract_tables_from_pdf(file_bytes: bytes) -> dict | None:
+    """
+    Reads document text via PyMuPDF and calls extract_tables_from_text.
+    """
+    import pymupdf
+    try:
+        doc = pymupdf.open(stream=file_bytes, filetype="pdf")
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text() + "\n"
+        return extract_tables_from_text(full_text)
+    except Exception as e:
+        logger.warning(f"Error extracting PDF text for table extraction: {e}")
+        return None
+
