@@ -31,13 +31,13 @@ async def upload_file(file: UploadFile = File(...)):
         
     filename = file.filename.lower()
     
-    # File size check (15MB)
+    # File size check (16MB)
     file.file.seek(0, 2) # seek to end
     file_size = file.file.tell()
     file.file.seek(0)    # reset to start
     
-    if file_size > 15 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 15MB.")
+    if file_size > 16 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 16MB.")
     
     if filename.endswith(".xlsx"):
         try:
@@ -110,29 +110,133 @@ async def upload_file(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
 
-    elif filename.endswith(".docx"):
+    elif filename.endswith((".docx", ".doc")):
         try:
+            import concurrent.futures
             from parsers.docx_parser import parse_docx
             from processors.text_processor import process_text
+            from processors.ocr_processor import extract_tables_from_text
             
             parsed_data = parse_docx(file)
-            text_data = process_text(
-                raw_text=parsed_data["text"],
-                page_count=None,
-                paragraph_count=parsed_data["paragraph_count"]
-            )
+            raw_text = parsed_data.get("text", "")
+            paragraph_count = parsed_data.get("paragraph_count")
+
+            # Run Text Summary and Table Extraction concurrently in parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                future_text = executor.submit(
+                    process_text,
+                    raw_text=raw_text,
+                    page_count=None,
+                    paragraph_count=paragraph_count
+                )
+                future_table = executor.submit(extract_tables_from_text, raw_text)
+
+                text_data = future_text.result()
+                raw_table = future_table.result()
+
+            tabular_data = None
+            data_category = "text"
+            if raw_table and raw_table.get("rows"):
+                tabular_data = process_tabular_data(raw_table)
+                data_category = "mixed"
+
+            file_ext = "docx" if filename.endswith(".docx") else "doc"
             return UploadResponse(
                 file_name=file.filename,
-                file_type="docx",
-                data_category="text",
-                tabular=None,
+                file_type=file_ext,
+                data_category=data_category,
+                tabular=tabular_data,
                 text=text_data
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
 
+    elif filename.endswith((".txt", ".md", ".rtf")):
+        try:
+            import concurrent.futures
+            from parsers.txt_parser import parse_txt
+            from processors.text_processor import process_text
+            from processors.ocr_processor import extract_tables_from_text
+
+            parsed_data = parse_txt(file)
+            raw_text = parsed_data.get("text", "")
+            paragraph_count = parsed_data.get("paragraph_count")
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                future_text = executor.submit(
+                    process_text,
+                    raw_text=raw_text,
+                    page_count=None,
+                    paragraph_count=paragraph_count
+                )
+                future_table = executor.submit(extract_tables_from_text, raw_text)
+
+                text_data = future_text.result()
+                raw_table = future_table.result()
+
+            tabular_data = None
+            data_category = "text"
+            if raw_table and raw_table.get("rows"):
+                tabular_data = process_tabular_data(raw_table)
+                data_category = "mixed"
+
+            file_ext = filename.split(".")[-1].lower()
+            return UploadResponse(
+                file_name=file.filename,
+                file_type=file_ext,
+                data_category=data_category,
+                tabular=tabular_data,
+                text=text_data
+            )
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse file. Error: {str(e)}")
+
+    elif filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif")):
+        try:
+            import concurrent.futures
+            from parsers.image_parser import parse_image
+            from processors.text_processor import process_text
+            from processors.ocr_processor import extract_tables_from_text
+
+            parsed_data = parse_image(file)
+            raw_text = parsed_data.get("text", "")
+            page_count = parsed_data.get("page_count", 1)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                future_text = executor.submit(
+                    process_text,
+                    raw_text=raw_text if raw_text else "Image document uploaded for analysis.",
+                    page_count=page_count,
+                    paragraph_count=None
+                )
+                future_table = executor.submit(extract_tables_from_text, raw_text)
+
+                text_data = future_text.result()
+                raw_table = future_table.result()
+
+            tabular_data = None
+            data_category = "text"
+            if raw_table and raw_table.get("rows"):
+                tabular_data = process_tabular_data(raw_table)
+                data_category = "mixed"
+
+            file_ext = filename.split(".")[-1].lower()
+            return UploadResponse(
+                file_name=file.filename,
+                file_type=file_ext,
+                data_category=data_category,
+                tabular=tabular_data,
+                text=text_data
+            )
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not parse image file. Error: {str(e)}")
+
     else:
-        raise HTTPException(status_code=400, detail="Unsupported file type. Allowed: .xlsx, .pdf, .docx, .csv")
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed: .xlsx, .csv, .pdf, .docx, .doc, .txt, .md, .rtf, .png, .jpg, .jpeg, .webp, .tiff"
+        )
+
 
 @app.get("/api/health")
 def health_check():
