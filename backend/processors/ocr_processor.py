@@ -13,21 +13,63 @@ load_dotenv(dotenv_path=env_path)
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
 
-def extract_tables_from_text(raw_text: str) -> dict | None:
+def parse_tsv_grid(raw_text: str) -> dict | None:
     """
-    Pure Prompt-Based DeepSeek AI Table Extractor.
-    Takes document/image text and uses deepseek-ai/deepseek-v4-flash
-    to extract, resolve headers, clean numbers, and return structured table JSON.
+    Patch C: Deterministic TSV Table Parser.
+    Parses tab-separated text lines directly into a structured table object
+    without relying on LLM availability.
     """
-    from openai import OpenAI
-
-    if not api_key:
-        logger.warning("NVIDIA_API_KEY missing — cannot run DeepSeek AI table extraction")
+    lines = [line.strip() for line in raw_text.split("\n") if "\t" in line]
+    if len(lines) < 2:
         return None
 
+    parsed_rows = []
+    for line in lines:
+        cells = [c.strip() for c in line.split("\t")]
+        # Convert numeric and currency strings to numbers where possible
+        clean_cells = []
+        for cell in cells:
+            if not cell or cell in ["--", "-", "null"]:
+                clean_cells.append(None)
+            else:
+                # Strip currency symbols and commas
+                clean_val = cell.replace("$", "").replace(",", "").strip()
+                try:
+                    if "." in clean_val:
+                        clean_cells.append(float(clean_val))
+                    else:
+                        clean_cells.append(int(clean_val))
+                except ValueError:
+                    clean_cells.append(cell)
+        parsed_rows.append(clean_cells)
+
+    if len(parsed_rows) >= 2 and len(parsed_rows[0]) >= 2:
+        headers = [str(h) if h is not None else f"Column_{idx+1}" for idx, h in enumerate(parsed_rows[0])]
+        data_rows = parsed_rows[1:]
+        return {
+            "headers": headers,
+            "rows": data_rows
+        }
+    return None
+
+def extract_tables_from_text(raw_text: str) -> dict | None:
+    """
+    Hybrid DeepSeek AI + Deterministic TSV Table Extractor.
+    Takes document/image text, performs deterministic TSV grid parsing,
+    and queries DeepSeek AI for table cleaning and normalization.
+    """
     if not raw_text or not raw_text.strip():
         logger.info("No text content provided for table extraction.")
         return None
+
+    # Step 1: Check deterministic TSV backstop (Patch C)
+    deterministic_table = parse_tsv_grid(raw_text)
+
+    from openai import OpenAI
+
+    if not api_key:
+        logger.warning("NVIDIA_API_KEY missing — using deterministic TSV table fallback if available")
+        return deterministic_table
 
     try:
         client = OpenAI(
@@ -59,7 +101,7 @@ Rules:
 - ONLY return "has_table": false if the entire document is purely unstructured narrative text with zero lists/tables.
 
 Document Text:
-{raw_text[:25000]}"""
+{raw_text[:60000]}"""
 
         logger.info("Sending document text to DeepSeek AI for table extraction...")
         completion = client.chat.completions.create(
@@ -97,6 +139,11 @@ Document Text:
 
     except Exception as e:
         logger.warning(f"DeepSeek AI table extraction error: {e}")
+
+    # Step 2: Fallback to deterministic TSV backstop if DeepSeek fails or returns no table
+    if deterministic_table:
+        logger.info(f"Using deterministic TSV table backstop: {len(deterministic_table['headers'])} headers, {len(deterministic_table['rows'])} rows")
+        return deterministic_table
 
     return None
 

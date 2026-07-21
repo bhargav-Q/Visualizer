@@ -9,8 +9,8 @@ This file defines the **exact JSON structure** the backend will return for each 
 ```
 POST /api/upload
 Content-Type: multipart/form-data
-Body: file (max 15 MB, allowed: .xlsx, .pdf, .docx, .csv)
-```
+Body: file (max 16 MB, allowed: .xlsx, .pdf, .docx, .csv, .txt)
+``` 
 
 ---
 
@@ -21,7 +21,7 @@ Every successful response shares this top-level shape:
 ```json
 {
   "file_name": "string",
-  "file_type": "xlsx | pdf | docx | csv",
+  "file_type": "xlsx | pdf | docx | csv | txt",
   "data_category": "tabular | text",
   "tabular": { ... } | null,
   "text": { ... } | null

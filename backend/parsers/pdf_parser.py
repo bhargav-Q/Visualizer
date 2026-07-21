@@ -44,10 +44,11 @@ def parse_pdf(file: UploadFile) -> dict:
             # Trigger OCR if page has sparse/empty text (<20 chars) or contains embedded image blocks
             if (len(native_text) < 20 or len(images) > 0) and ocr_engine:
                 try:
-                    pix = page.get_pixmap(dpi=150)
-                    result, _ = ocr_engine(pix.tobytes("png"))
-                    if result:
-                        ocr_text = " ".join([res[1] for res in result]).strip()
+                    from parsers.spatial_grid import reconstruct_grid_from_ocr, run_ocr_with_orientation_check
+                    results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
+                    if results:
+                        _, tsv_output = reconstruct_grid_from_ocr(results)
+                        ocr_text = tsv_output.strip()
                 except Exception as e:
                     logger.warning(f"OCR error on PDF page {i+1}: {e}")
 
@@ -57,7 +58,7 @@ def parse_pdf(file: UploadFile) -> dict:
                 if not page_content:
                     page_content = ocr_text
                 elif ocr_text not in page_content and len(ocr_text) > len(page_content):
-                    # Prefer OCR text if it captured more content than native text layer
+                    # Prefer OCR TSV text if it captured more structured content than native text layer
                     page_content = native_text + "\n" + ocr_text
 
             if page_content:
