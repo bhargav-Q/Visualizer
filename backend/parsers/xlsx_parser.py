@@ -7,8 +7,10 @@ def parse_xlsx(file: UploadFile):
     Reads an uploaded .xlsx file using pure Python (openpyxl) and returns 
     raw column names and row data.
     """
+    file.file.seek(0)
     contents = file.file.read()
     file.file.seek(0)
+
     
     # Load workbook in read-only and data-only mode for performance and formulas
     wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True, read_only=True)

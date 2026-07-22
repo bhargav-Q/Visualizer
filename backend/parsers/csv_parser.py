@@ -46,8 +46,10 @@ def parse_csv(file: UploadFile) -> dict:
     Reads an uploaded .csv file using pure Python and returns 
     raw column names and row data.
     """
+    file.file.seek(0)
     contents = file.file.read()
     file.file.seek(0)
+
     
     # Try decoding as UTF-8 (with BOM check), fallback to Latin-1
     try:

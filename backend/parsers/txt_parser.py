@@ -5,8 +5,10 @@ def parse_txt(file: UploadFile) -> dict:
     """
     Reads an uploaded .txt, .md, or .rtf file and extracts text and metadata.
     """
+    file.file.seek(0)
     raw_bytes = file.file.read()
     file.file.seek(0)
+
 
     # Try decoding UTF-8 first, fallback to latin-1
     try:
