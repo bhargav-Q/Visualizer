@@ -95,10 +95,19 @@ async def upload_file(file: UploadFile = File(...)):
                     page_count=parsed_data["page_count"],
                     paragraph_count=None
                 )
-                future_table = executor.submit(extract_tables_from_text, parsed_data["text"])
+                table_input_text = parsed_data.get("structured_tsv") or parsed_data["text"]
+                future_table = executor.submit(extract_tables_from_text, table_input_text)
 
                 text_data = future_text.result()
-                raw_table = future_table.result()
+                # Problem 5 Fix: Wrap table extraction result in try/except so DeepSeek
+                # timeouts gracefully fall through to the TSV backstop instead of killing
+                # the entire request with a 422 error.
+                try:
+                    raw_table = future_table.result()
+                except Exception as table_err:
+                    logger.warning(f"DeepSeek table extraction failed, falling back to TSV backstop: {table_err}")
+                    raw_table = None
+
 
             # Gap 2 Fix: Deterministic TSV Table Fallback Backstop
             if not raw_table or not raw_table.get("rows"):
@@ -138,10 +147,21 @@ async def upload_file(file: UploadFile = File(...)):
                     page_count=None,
                     paragraph_count=paragraph_count
                 )
-                future_table = executor.submit(extract_tables_from_text, raw_text)
+                # Problem 4 Fix: Route DOCX structured_tsv to table extractor (same as PDF pathway)
+                table_input_text = parsed_data.get("structured_tsv") or raw_text
+                future_table = executor.submit(extract_tables_from_text, table_input_text)
 
                 text_data = future_text.result()
-                raw_table = future_table.result()
+                # Problem 5 Fix: Wrap table extraction result in try/except for timeout resilience
+                try:
+                    raw_table = future_table.result()
+                except Exception as table_err:
+                    logger.warning(f"DeepSeek table extraction failed for DOCX, falling back to TSV backstop: {table_err}")
+                    raw_table = None
+
+            # DOCX TSV Fallback Backstop (matching PDF pathway)
+            if not raw_table or not raw_table.get("rows"):
+                raw_table = parse_tsv_grid(parsed_data.get("structured_tsv") or raw_text)
 
             tabular_data = None
             data_category = "text"

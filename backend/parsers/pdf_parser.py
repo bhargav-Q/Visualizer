@@ -25,8 +25,10 @@ def parse_pdf(file: UploadFile) -> dict:
     RapidOCR pixmap scanning for scanned pages or pages with embedded images.
     Applies spatial bounding-box grid reconstruction and multi-page header deduplication.
     """
+    file.file.seek(0)
     contents = file.file.read()
     file.file.seek(0)
+
     
     full_text_pages = []
     structured_tsv_pages = []
@@ -47,7 +49,9 @@ def parse_pdf(file: UploadFile) -> dict:
             grid_rows = []
             
             # Trigger OCR if page has sparse/empty text (<20 chars) or contains embedded image blocks
-            if (len(native_text) < 20 or len(images) > 0) and ocr_engine:
+            # Problem 1 Fix: Trigger OCR on sparse text (<50 chars) OR embedded images.
+            # This catches flat-raster scanned pages where PyMuPDF reports 0 images and 0 text.
+            if (len(native_text) < 50 or len(images) > 0) and ocr_engine:
                 try:
                     from parsers.spatial_grid import reconstruct_grid_from_ocr, run_ocr_with_orientation_check
                     results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
@@ -81,6 +85,40 @@ def parse_pdf(file: UploadFile) -> dict:
                 full_text_pages.append(f"--- Page {i+1} ---\n" + page_content)
 
         doc.close()
+
+        # Problem 3 Fix: Deduplicate repeated header lines from digital text pages.
+        # Multi-page PDFs often repeat the same table header row on every page.
+        if len(full_text_pages) > 1:
+            from collections import Counter
+            all_lines = []
+            for page_block in full_text_pages:
+                for line in page_block.split("\n"):
+                    stripped = line.strip()
+                    if stripped and not stripped.startswith("--- Page"):
+                        all_lines.append(stripped)
+            line_counts = Counter(all_lines)
+            # A header is a line that appears on 3+ pages and contains separator chars
+            repeated_headers = set()
+            for line_text, count in line_counts.items():
+                if count >= 3 and ("|" in line_text or "\t" in line_text):
+                    repeated_headers.add(line_text)
+            if repeated_headers:
+                deduped_pages = []
+                first_occurrence = set()
+                for page_block in full_text_pages:
+                    lines = page_block.split("\n")
+                    filtered = []
+                    for line in lines:
+                        stripped = line.strip()
+                        if stripped in repeated_headers:
+                            if stripped not in first_occurrence:
+                                first_occurrence.add(stripped)
+                                filtered.append(line)
+                            # else: skip duplicate header
+                        else:
+                            filtered.append(line)
+                    deduped_pages.append("\n".join(filtered))
+                full_text_pages = deduped_pages
     except Exception as e:
         logger.warning(f"PyMuPDF parse error: {e}, falling back to pypdf...")
         try:

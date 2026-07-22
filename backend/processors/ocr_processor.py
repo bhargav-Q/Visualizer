@@ -77,42 +77,49 @@ def extract_tables_from_text(raw_text: str) -> dict | None:
             api_key=api_key
         )
 
-        prompt = f"""You are an expert tabular data extraction system. Analyze the following document or image text and extract ALL structured tables, claims lists, loss-run reports, rating worksheets, payroll breakdowns, or invoice schedules across ALL pages into a single combined JSON table.
+        prompt = f"""You are an expert tabular data extraction system. Analyze the following document or image text and extract ALL structured tables, data grids, invoices, claims lists, or financial reports into a single combined JSON table.
 
-Return ONLY valid JSON matching this exact structure:
+Return ONLY valid JSON matching this exact JSON schema structure:
 {{
   "has_table": true,
-  "headers": ["CLASS CODE / ITEM", "DESCRIPTION / YEAR", "COUNT / EMPLOYEES", "AMOUNT / PAYROLL"],
+  "headers": ["<Column 1 Name>", "<Column 2 Name>", "<Column 3 Name>", "... (Include ALL N Column Headers from document)"],
   "rows": [
-    ["172", "Truck Farm", 85, 2700000],
-    ["8810", "Clerical Office Employees - NOC", 2, 175000],
-    ["4007611", "2025 Open Claim", 1, 1600],
-    ["0286657", "2021 Closed Claim", 1, 136300]
+    ["<Row 1 Cell 1>", "<Row 1 Cell 2>", "<Row 1 Cell 3>", "... (Include ALL N Cells matching headers)"],
+    ["<Row 2 Cell 1>", "<Row 2 Cell 2>", "<Row 2 Cell 3>", "... (Include ALL N Cells matching headers)"]
   ]
 }}
 
-Rules:
-- Actively extract and combine ALL grid tables, Loss-Run reports, Parsed Claims, rating worksheets, or financial breakdowns from ALL pages.
+
+CRITICAL RULES:
+- DYNAMIC HEADERS: Extract ALL original column headers dynamically as they appear in the source document. Do NOT restrict or merge columns into a fixed 4-column schema. If the table has 8, 12, or 18 columns, extract ALL 8, 12, or 18 columns!
+- Preserve exact column order from left to right. 
 - Replace dashes ("--"), blank cells, or missing values with null or "".
-- Identify unified, clean column headers (e.g. "ITEM / CODE", "DESCRIPTION", "COUNT / EMPLOYEES", "AMOUNT / PAYROLL").
-- Convert monetary amounts and numeric values to pure numbers (e.g. "$1,600" -> 1600, "$2,700,000" -> 2700000).
-- Keep descriptions, statuses, claim numbers, and dates as clean strings.
+- Convert monetary amounts and numeric values to pure numbers (e.g. "$1,600" -> 1600, "28,340.47" -> 28340.47).
+- Keep descriptions, order IDs, product names, dates, and text codes as clean strings.
 - If 2 or more rows of structured or tabular data are found anywhere in the document, set "has_table": true.
 - ONLY return "has_table": false if the entire document is purely unstructured narrative text with zero lists/tables.
 
 Document Text:
 {raw_text[:60000]}"""
 
-        logger.info("Sending document text to DeepSeek AI for table extraction...")
-        completion = client.chat.completions.create(
-            model="deepseek-ai/deepseek-v4-flash",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=4096,
-            extra_body={"chat_template_kwargs": {"thinking": False}},
-            response_format={"type": "json_object"},
-            timeout=30.0
-        )
+
+        model_name = os.getenv("TABLE_AI_MODEL", "deepseek-ai/deepseek-v4-flash")
+        logger.info(f"Sending document text to AI model {model_name} for table extraction...")
+
+        
+        kwargs = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens": 4096,
+            "response_format": {"type": "json_object"},
+            "timeout": 45.0
+        }
+        if "deepseek" in model_name.lower():
+            kwargs["extra_body"] = {"chat_template_kwargs": {"thinking": False}}
+
+        completion = client.chat.completions.create(**kwargs)
+
 
         content = completion.choices[0].message.content.strip()
         
@@ -162,3 +169,105 @@ def extract_tables_from_pdf(file_bytes: bytes) -> dict | None:
         logger.warning(f"Error extracting PDF text for table extraction: {e}")
         return None
 
+def extract_tables_with_nemotron_ocr(image_bytes: bytes) -> dict | None:
+    """
+    Invokes NVIDIA Nemotron OCR v2 endpoint (https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2)
+    with base64 encoded image payload as per NVIDIA specifications.
+    """
+    if not api_key or not image_bytes:
+        return None
+
+    import base64
+    import requests
+
+    invoke_url = os.getenv("NEMOTRON_OCR_URL", "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2")
+    image_b64 = base64.b64encode(image_bytes).decode()
+
+    if len(image_b64) > 180000:
+        logger.warning("Image payload exceeds 180,000 base64 characters limit for Nemotron OCR v2 direct payload — rejecting to avoid silent API failure")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Accept": "application/json"
+    }
+
+    payload = {
+        "input": [
+            {
+                "type": "image_url",
+                "url": f"data:image/png;base64,{image_b64}"
+            }
+        ]
+    }
+
+    try:
+        response = requests.post(invoke_url, headers=headers, json=payload, timeout=30.0)
+        if response.status_code == 200:
+            res = response.json()
+            logger.info("Successfully received Nemotron OCR v2 API response")
+            return res
+        else:
+            logger.warning(f"Nemotron OCR v2 returned status {response.status_code}: {response.text}")
+    except Exception as e:
+        logger.warning(f"Nemotron OCR v2 API error: {e}")
+
+    return None
+
+
+def extract_page_with_nemotron_sectioned(page, dpi=150, max_b64_chars=170000):
+    """
+    Problem 2 Fix: Auto page-section splitting for Nemotron OCR v2.
+    Renders a PyMuPDF page in vertical sections that each fit under the
+    180K base64 character limit, sends each section to Nemotron OCR v2,
+    and merges all text_detections into one combined result.
+
+    Args:
+        page: A PyMuPDF page object.
+        dpi: Render resolution (default 150 for crisp text).
+        max_b64_chars: Maximum base64 characters per section (default 170K with 10K safety margin).
+
+    Returns:
+        List of raw text strings extracted from all sections, or empty list on failure.
+    """
+    import base64
+    import pymupdf
+
+    rect = page.rect
+    page_height = rect.y1 - rect.y0
+
+    # Start with full page to check if it fits
+    pix_full = page.get_pixmap(dpi=dpi)
+    full_b64_len = len(base64.b64encode(pix_full.tobytes("png")))
+
+    if full_b64_len <= max_b64_chars:
+        # Full page fits — send as one request
+        result = extract_tables_with_nemotron_ocr(pix_full.tobytes("png"))
+        if result and result.get("data"):
+            detections = result["data"][0].get("text_detections", [])
+            return [d["text_prediction"]["text"] for d in detections]
+        return []
+
+    # Calculate how many vertical sections we need
+    ratio = full_b64_len / max_b64_chars
+    num_sections = max(2, int(ratio) + 1)
+    section_height = page_height / num_sections
+
+    logger.info(f"Page too large ({full_b64_len:,} b64 chars). Splitting into {num_sections} vertical sections.")
+
+    all_texts = []
+    for i in range(num_sections):
+        y_start = rect.y0 + (i * section_height)
+        y_end = rect.y0 + ((i + 1) * section_height)
+        clip = pymupdf.Rect(rect.x0, y_start, rect.x1, y_end)
+
+        pix_section = page.get_pixmap(dpi=dpi, clip=clip)
+        section_bytes = pix_section.tobytes("png")
+
+        result = extract_tables_with_nemotron_ocr(section_bytes)
+        if result and result.get("data"):
+            detections = result["data"][0].get("text_detections", [])
+            section_texts = [d["text_prediction"]["text"] for d in detections]
+            all_texts.extend(section_texts)
+
+    return all_texts
