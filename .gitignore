@@ -3,6 +3,7 @@ backend/venv/
 __pycache__/
 design.md
 PROJECT_ARCHITECTURE.md
+PROJECT_CONTEXT.md
 data/
 test_files/
 

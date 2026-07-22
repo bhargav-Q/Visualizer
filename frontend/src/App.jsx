@@ -4,10 +4,12 @@ import axios from 'axios';
 import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
+import DynamicProcessingConsole from './components/DynamicProcessingConsole';
 import './App.css';
 
 function App() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [activeFile, setActiveFile] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [data, setData] = React.useState(null);
   const [theme, setTheme] = React.useState('light');
@@ -22,6 +24,7 @@ function App() {
 
   const handleFileSelect = async (file) => {
     setIsLoading(true);
+    setActiveFile(file);
     setError(null);
     setData(null);
 
@@ -34,13 +37,14 @@ function App() {
       });
       console.log("Success:", response.data);
       setData(response.data);
+      setIsLoading(false);
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.detail || err.message || "An error occurred during upload.");
-    } finally {
-      setIsLoading(false);
+      // Keep isLoading true so user sees the pinpointed error stage in console
     }
   };
+
 
   return (
     <div className="app-container">
@@ -118,20 +122,20 @@ function App() {
         )}
 
         {isLoading && (
-          <div className="loading-state flex-col-center">
-            <Loader2 className="animate-spin" size={48} color="var(--brand-purple)" />
-            <h3 style={{ marginTop: '16px' }}>Processing File...</h3>
-            <p style={{ color: 'var(--text-secondary)' }}>Extracting data and running AI models.</p>
+          <div className="hero-centered-console animate-fade-in">
+            <DynamicProcessingConsole 
+              file={activeFile} 
+              errorState={error}
+              onRetry={() => {
+                setIsLoading(false);
+                setError(null);
+                setActiveFile(null);
+                setData(null);
+              }}
+            />
           </div>
         )}
 
-        {error && (
-          <div className="error-toast">
-            <AlertCircle size={20} />
-            <span>{error}</span>
-            <button onClick={() => setError(null)}>Try Again</button>
-          </div>
-        )}
 
         {data && (
           <ErrorBoundary>
