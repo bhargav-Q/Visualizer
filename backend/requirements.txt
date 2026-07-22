@@ -9,3 +9,4 @@ pdfplumber
 pymupdf
 requests
 rapidocr-onnxruntime
+python-docx

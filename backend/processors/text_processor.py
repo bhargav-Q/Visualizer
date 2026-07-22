@@ -14,8 +14,9 @@ api_key = os.getenv("NVIDIA_API_KEY")
 def process_text(raw_text: str, page_count: int = None, paragraph_count: int = None) -> TextResult:
     word_count = len(raw_text.split())
     
-    # Base fallback in case API fails
-    model_name = "deepseek-ai/deepseek-v4-flash"
+    model_name = os.getenv("TEXT_AI_MODEL", "deepseek-ai/deepseek-v4-flash")
+
+
     fallback_summary = "Summary unavailable — AI service is temporarily down."
     fallback_keywords = []
 

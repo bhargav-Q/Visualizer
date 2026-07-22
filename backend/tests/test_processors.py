@@ -105,3 +105,30 @@ def test_csv_parser():
     assert result["rows"][0][1] == 10.5
     assert result["rows"][0][2] == "Sales"
 
+
+def test_parse_tsv_grid_dynamic_n_columns():
+    """Test deterministic TSV grid parsing for dynamic N columns (e.g. 8+ columns)."""
+    from processors.ocr_processor import parse_tsv_grid
+
+    tsv_data = "Col1\tCol2\tCol3\tCol4\tCol5\tCol6\tCol7\tCol8\nVal1\tVal2\t100\t200\t$50.50\tSales\t2025-01-01\tUS\n"
+    res = parse_tsv_grid(tsv_data)
+
+    assert res is not None
+    assert len(res["headers"]) == 8
+    assert res["headers"] == ["Col1", "Col2", "Col3", "Col4", "Col5", "Col6", "Col7", "Col8"]
+    assert len(res["rows"]) == 1
+    assert res["rows"][0][4] == 50.5  # Currency stripped to numeric
+
+
+def test_nemotron_ocr_v2_endpoint_mock(mocker):
+    """Test Nemotron OCR v2 API handler with mocked 200 response."""
+    from processors.ocr_processor import extract_tables_with_nemotron_ocr
+
+    mock_post = mocker.patch("requests.post")
+    mock_post.return_value.status_code = 200
+    mock_post.return_value.json.return_value = {"detected_elements": ["Table 1"]}
+
+    res = extract_tables_with_nemotron_ocr(b"fake_image_bytes")
+    assert res == {"detected_elements": ["Table 1"]}
+
+
