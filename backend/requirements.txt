@@ -10,3 +10,4 @@ pymupdf
 requests
 rapidocr-onnxruntime
 python-docx
+duckdb

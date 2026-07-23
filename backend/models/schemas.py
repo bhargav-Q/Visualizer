@@ -48,10 +48,40 @@ class TextResult(BaseModel):
     paragraph_count: Optional[int] = None
     ai_model: str
 
+class ExtractedMetricResponse(BaseModel):
+    category: str
+    metric_value: float
+    unit: Optional[str] = None
+    context_snippet: str
+    page_number: Optional[int] = 1
+    bbox: Optional[List[float]] = None
+
+class KeyValuePairResponse(BaseModel):
+    key_name: str
+    value: str
+    context_snippet: str
+    page_number: Optional[int] = 1
+
+class ExtractedTableResponse(BaseModel):
+    table_title: Optional[str] = None
+    headers: List[str] = []
+    rows: List[List[Optional[str]]] = []
+    page_number: Optional[int] = 1
+
+class DocumentAnalyticsResponse(BaseModel):
+    document_title: str
+    report_date: Optional[str] = None
+    summary: Optional[str] = ""
+    keywords: List[str] = []
+    metrics: List[ExtractedMetricResponse] = []
+    key_value_pairs: List[KeyValuePairResponse] = []
+    tables: List[ExtractedTableResponse] = []
+
 class UploadResponse(BaseModel):
     file_name: str
     file_type: str
     data_category: str
     tabular: Optional[TabularResult] = None
     text: Optional[TextResult] = None
+    analytics: Optional[DocumentAnalyticsResponse] = None
     processing_time: Optional[float] = None

@@ -1,0 +1,136 @@
+import os
+import json
+import base64
+import time
+import logging
+from typing import Optional
+from dotenv import load_dotenv
+from openai import OpenAI
+from engine.pydantic_models import DocumentAnalytics
+
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+api_key = os.getenv("NVIDIA_API_KEY")
+
+VISION_MODEL_NAME = "meta/llama-3.2-11b-vision-instruct"
+
+def get_openai_client() -> Optional[OpenAI]:
+    """Returns an OpenAI client initialized with NVIDIA NIM base URL."""
+    if not api_key:
+        logger.warning("NVIDIA_API_KEY is missing from environment")
+        return None
+    return OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key
+    )
+
+def encode_image_to_base64(image_bytes: bytes) -> str:
+    """Encodes raw image bytes into a Base64 data URL string."""
+    encoded = base64.b64encode(image_bytes).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+def extract_analytics_with_vision(image_bytes: bytes, text_hint: str = "", max_retries: int = 3) -> Optional[DocumentAnalytics]:
+    """
+    Sends rendered PNG page image bytes to meta/llama-3.2-11b-vision-instruct
+    to extract metrics, key-value pairs, tables, summary, and keywords.
+    Enforces strict Pydantic JSON validation with retry backoff.
+    """
+    client = get_openai_client()
+    if not client or not image_bytes:
+        return None
+
+    base64_url = encode_image_to_base64(image_bytes)
+
+    prompt = f"""You are an expert document analysis and vision extraction system. Analyze the attached document image and extract ALL key information into a single structured JSON response.
+
+Context Text Hint:
+{text_hint[:2000]}
+
+Return ONLY valid JSON matching this exact JSON schema:
+{{
+  "document_title": "<Title of the report or document>",
+  "report_date": "<Date of report if available e.g. 2025-01-15 or null>",
+  "summary": "<3-5 sentence TL;DR executive summary>",
+  "keywords": ["<keyword 1>", "<keyword 2>", "<keyword 3>"],
+  "metrics": [
+    {{
+      "category": "<Metric Category Name>",
+      "metric_value": 12345.67,
+      "unit": "<USD, %, kg, units or null>",
+      "context_snippet": "<Exact sentence or row text supporting this metric>",
+      "page_number": 1
+    }}
+  ],
+  "key_value_pairs": [
+    {{
+      "key_name": "<Key / Label Name>",
+      "value": "<Extracted Value>",
+      "context_snippet": "<Supporting text phrase>",
+      "page_number": 1
+    }}
+  ],
+  "tables": [
+    {{
+      "table_title": "<Table Title>",
+      "headers": ["<Col 1>", "<Col 2>", "<Col 3>"],
+      "rows": [
+        ["<Row 1 Cell 1>", "<Row 1 Cell 2>", "<Row 1 Cell 3>"]
+      ],
+      "page_number": 1
+    }}
+  ]
+}}
+
+CRITICAL EXTRACTION RULES:
+- Numerical Metrics: Extract ALL numbers, revenues, expenses, counts, percentages, and metrics. Convert monetary values to pure floating-point numbers (e.g., "$45,000.50" -> 45000.5).
+- Key-Value Pairs: Extract document attributes like Invoice #, Author, Organization, Account Number, Status, Tax ID.
+- Tables: Extract header columns and cell rows preserving left-to-right cell order.
+- Context Snippets: Include the exact sentence supporting each metric so cell coordinates can be matched.
+"""
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": base64_url}}
+            ]
+        }
+    ]
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"Querying NIM Vision API model '{VISION_MODEL_NAME}' (Attempt {attempt}/{max_retries})...")
+            completion = client.chat.completions.create(
+                model=VISION_MODEL_NAME,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=4096,
+                timeout=45.0
+            )
+
+            content = completion.choices[0].message.content.strip()
+
+            # Clean reasoning tags if model includes them
+            if "<think>" in content:
+                content = content.split("</think>")[-1].strip() if "</think>" in content else content.split("<think>")[-1].strip()
+
+            start_idx = content.find("{")
+            end_idx = content.rfind("}")
+            if start_idx != -1 and end_idx != -1:
+                content = content[start_idx:end_idx+1]
+
+            data = json.loads(content)
+            analytics = DocumentAnalytics(**data)
+            logger.info(f"Successfully validated DocumentAnalytics vision response: {len(analytics.metrics)} metrics, {len(analytics.key_value_pairs)} KV pairs, {len(analytics.tables)} tables")
+            return analytics
+
+        except json.JSONDecodeError as json_err:
+            logger.warning(f"Vision LLM JSON parse error on attempt {attempt}: {json_err}")
+        except Exception as err:
+            logger.warning(f"Vision LLM API error on attempt {attempt}: {err}")
+            if attempt < max_retries:
+                time.sleep(2 ** attempt) # Exponential backoff
+
+    return None
