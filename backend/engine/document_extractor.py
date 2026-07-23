@@ -74,7 +74,43 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
                         "bbox": [b[0], b[1], b[2], b[3]],
                         "text": b[4].strip()
                     })
-            page_text_blocks_by_page[page_num] = blocks
+
+            # Check if we should fall back to OCR coordinates for scanned/image pages
+            if len(blocks) < 2 or sum(len(b["text"]) for b in blocks) < 50:
+                try:
+                    from parsers.pdf_parser import get_ocr_engine
+                    ocr_engine = get_ocr_engine()
+                    if ocr_engine:
+                        from parsers.spatial_grid import run_ocr_with_orientation_check
+                        ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
+                        if ocr_results:
+                            blocks = []
+                            scale_factor = 72.0 / 150.0
+                            for item in ocr_results:
+                                box = item[0]
+                                text = str(item[1]).strip()
+                                if text:
+                                    xs = [pt[0] for pt in box]
+                                    ys = [pt[1] for pt in box]
+                                    min_x, max_x = min(xs), max(xs)
+                                    min_y, max_y = min(ys), max(ys)
+                                    blocks.append({
+                                        "bbox": [
+                                            min_x * scale_factor,
+                                            min_y * scale_factor,
+                                            max_x * scale_factor,
+                                            max_y * scale_factor
+                                        ],
+                                        "text": text
+                                    })
+                except Exception as ocr_err:
+                    logger.warning(f"Failed to run OCR fallback blocks on page {page_num}: {ocr_err}")
+
+            page_text_blocks_by_page[page_num] = {
+                "blocks": blocks,
+                "width": float(page.rect.width),
+                "height": float(page.rect.height)
+            }
             page_text = page.get_text().strip()
             if page_text:
                 full_text_pages.append(f"--- Page {page_num} ---\n" + page_text)
@@ -97,10 +133,14 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
     # 3. Match metrics to bounding boxes
     for m in analytics.metrics:
         p_num = m.page_number or 1
-        blocks = page_text_blocks_by_page.get(p_num) or page_text_blocks_by_page.get(1, [])
-        matched_bbox = match_text_to_bbox(blocks, m.context_snippet)
-        if matched_bbox:
-            m.bbox = matched_bbox
+        page_info = page_text_blocks_by_page.get(p_num) or page_text_blocks_by_page.get(1)
+        if page_info:
+            blocks = page_info["blocks"]
+            m.page_width = page_info["width"]
+            m.page_height = page_info["height"]
+            matched_bbox = match_text_to_bbox(blocks, m.context_snippet)
+            if matched_bbox:
+                m.bbox = matched_bbox
 
     return analytics
 

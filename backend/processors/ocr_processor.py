@@ -221,6 +221,7 @@ def extract_page_with_nemotron_sectioned(page, dpi=150, max_b64_chars=170000):
     Renders a PyMuPDF page in vertical sections that each fit under the
     180K base64 character limit, sends each section to Nemotron OCR v2,
     and merges all text_detections into one combined result.
+    If the Nemotron Cloud API returns an error or is unavailable, falls back gracefully.
 
     Args:
         page: A PyMuPDF page object.
@@ -228,7 +229,7 @@ def extract_page_with_nemotron_sectioned(page, dpi=150, max_b64_chars=170000):
         max_b64_chars: Maximum base64 characters per section (default 170K with 10K safety margin).
 
     Returns:
-        List of raw text strings extracted from all sections, or empty list on failure.
+        List of raw text strings extracted from all sections, or fallback results on failure.
     """
     import base64
     import pymupdf
@@ -240,34 +241,91 @@ def extract_page_with_nemotron_sectioned(page, dpi=150, max_b64_chars=170000):
     pix_full = page.get_pixmap(dpi=dpi)
     full_b64_len = len(base64.b64encode(pix_full.tobytes("png")))
 
+    result = None
+    has_failed = False
+
     if full_b64_len <= max_b64_chars:
         # Full page fits — send as one request
-        result = extract_tables_with_nemotron_ocr(pix_full.tobytes("png"))
-        if result and result.get("data"):
-            detections = result["data"][0].get("text_detections", [])
-            return [d["text_prediction"]["text"] for d in detections]
+        try:
+            result = extract_tables_with_nemotron_ocr(pix_full.tobytes("png"))
+            if not result or not result.get("data"):
+                has_failed = True
+        except Exception as err:
+            logger.warning(f"Nemotron OCR direct request error: {err}")
+            has_failed = True
+    else:
+        # Calculate how many vertical sections we need
+        ratio = full_b64_len / max_b64_chars
+        num_sections = max(2, int(ratio) + 1)
+        section_height = page_height / num_sections
+
+        logger.info(f"Page too large ({full_b64_len:,} b64 chars). Splitting into {num_sections} vertical sections.")
+
+        all_texts = []
+        for i in range(num_sections):
+            y_start = rect.y0 + (i * section_height)
+            y_end = rect.y0 + ((i + 1) * section_height)
+            clip = pymupdf.Rect(rect.x0, y_start, rect.x1, y_end)
+
+            pix_section = page.get_pixmap(dpi=dpi, clip=clip)
+            section_bytes = pix_section.tobytes("png")
+
+            try:
+                sec_res = extract_tables_with_nemotron_ocr(section_bytes)
+                if sec_res and sec_res.get("data"):
+                    detections = sec_res["data"][0].get("text_detections", [])
+                    section_texts = [d["text_prediction"]["text"] for d in detections]
+                    all_texts.extend(section_texts)
+                else:
+                    has_failed = True
+                    break
+            except Exception as err:
+                logger.warning(f"Nemotron OCR section request error at section {i+1}: {err}")
+                has_failed = True
+                break
+        
+        if not has_failed:
+            return all_texts
+
+    # ⚠️ Automatic Fallback Logic: Triggered if Cloud Nemotron API is down, rate-limited, or unauthorized (404/403/503)
+    if has_failed or not result:
+        logger.warning("[WARNING] Cloud Nemotron OCR API unavailable. Falling back to local RapidOCR / Vision LLM.")
+        
+        # Fallback Option A: Local RapidOCR
+        try:
+            from parsers.pdf_parser import get_ocr_engine
+            ocr_engine = get_ocr_engine()
+            if ocr_engine:
+                from parsers.spatial_grid import run_ocr_with_orientation_check
+                logger.info("Executing Fallback A: local RapidOCR engine...")
+                ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=dpi)
+                if ocr_results:
+                    return [str(item[1]).strip() for item in ocr_results if item[1]]
+        except Exception as ocr_err:
+            logger.warning(f"Local RapidOCR fallback failed: {ocr_err}")
+
+        # Fallback Option B: Llama-3.2-Vision (NVIDIA API)
+        try:
+            from engine.vision_client import extract_analytics_with_vision
+            logger.info("Executing Fallback B: meta/llama-3.2-11b-vision-instruct...")
+            pix = page.get_pixmap(dpi=dpi)
+            analytics = extract_analytics_with_vision(pix.tobytes("png"))
+            if analytics:
+                texts = []
+                if analytics.summary:
+                    texts.append(analytics.summary)
+                for m in analytics.metrics:
+                    if m.context_snippet:
+                        texts.append(m.context_snippet)
+                for kv in analytics.key_value_pairs:
+                    if kv.context_snippet:
+                        texts.append(kv.context_snippet)
+                return texts
+        except Exception as vision_err:
+            logger.warning(f"Vision LLM fallback failed: {vision_err}")
+
         return []
 
-    # Calculate how many vertical sections we need
-    ratio = full_b64_len / max_b64_chars
-    num_sections = max(2, int(ratio) + 1)
-    section_height = page_height / num_sections
-
-    logger.info(f"Page too large ({full_b64_len:,} b64 chars). Splitting into {num_sections} vertical sections.")
-
-    all_texts = []
-    for i in range(num_sections):
-        y_start = rect.y0 + (i * section_height)
-        y_end = rect.y0 + ((i + 1) * section_height)
-        clip = pymupdf.Rect(rect.x0, y_start, rect.x1, y_end)
-
-        pix_section = page.get_pixmap(dpi=dpi, clip=clip)
-        section_bytes = pix_section.tobytes("png")
-
-        result = extract_tables_with_nemotron_ocr(section_bytes)
-        if result and result.get("data"):
-            detections = result["data"][0].get("text_detections", [])
-            section_texts = [d["text_prediction"]["text"] for d in detections]
-            all_texts.extend(section_texts)
-
-    return all_texts
+    # Successful direct Nemotron OCR result parsing
+    detections = result["data"][0].get("text_detections", [])
+    return [d["text_prediction"]["text"] for d in detections]
