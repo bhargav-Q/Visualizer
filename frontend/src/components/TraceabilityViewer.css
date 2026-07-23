@@ -1,0 +1,322 @@
+/* Traceability Split Layout Container */
+.trace-viewer-container {
+  display: flex;
+  height: calc(100vh - 190px);
+  min-height: 500px;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  margin-top: 10px;
+}
+
+/* Left Sidebar: List of metrics */
+.trace-sidebar {
+  width: 380px;
+  min-width: 320px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: flex-direction;
+  flex-direction: column;
+  background: rgba(106, 27, 154, 0.01);
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.sidebar-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.icon-purple {
+  color: var(--brand-purple);
+}
+
+.sidebar-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  margin-bottom: 16px;
+}
+
+/* Search Box Container */
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+}
+
+.search-wrapper input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-warm);
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.search-wrapper input:focus {
+  border-color: var(--brand-purple);
+  box-shadow: 0 0 0 2px rgba(106, 27, 154, 0.1);
+}
+
+/* Scrollable Metric cards container */
+.metrics-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Individual Metric Card */
+.metric-trace-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-light);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-trace-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--brand-purple);
+  box-shadow: 0 4px 12px rgba(106, 27, 154, 0.06);
+}
+
+.metric-trace-card.active {
+  border-color: var(--brand-purple);
+  background: rgba(106, 27, 154, 0.03);
+  box-shadow: 0 4px 16px rgba(106, 27, 154, 0.08);
+}
+
+.metric-trace-card.no-bbox {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.metric-trace-card.no-bbox:hover {
+  transform: none;
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+
+/* Top metadata row inside card */
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metric-category-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--brand-purple);
+  background: var(--badge-ai-sales);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.page-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Numeric metric representation */
+.metric-val-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.metric-value-num {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'Newsreader', Georgia, serif;
+}
+
+.metric-unit-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--brand-purple);
+}
+
+/* Context citation snippet */
+.metric-snippet {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Bounding box availability indicator */
+.trace-action-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--success);
+  margin-top: 4px;
+}
+
+.trace-action-indicator.inactive {
+  color: var(--text-muted);
+}
+
+/* Right Content Viewport: Renders Canvas list */
+.trace-document-view {
+  flex: 1;
+  background: #333338;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  gap: 24px;
+}
+
+/* PDF Page Container */
+.pdf-page-wrapper {
+  position: relative;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+}
+
+.pdf-canvas-container {
+  position: relative;
+}
+
+.pdf-canvas-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+}
+
+/* Page footer text */
+.page-number-footer {
+  width: 100%;
+  text-align: center;
+  padding: 8px 0;
+  font-size: 0.75rem;
+  color: #88888b;
+  background: #fbfbfb;
+  border-top: 1px solid #eeeef2;
+}
+
+/* ⚠️ GLOWING HIGHLIGHT BOX */
+.coordinate-highlight-box {
+  position: absolute;
+  border: 2px solid #ef4444;
+  background-color: rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+  pointer-events: none;
+  border-radius: 4px;
+  transition: all 0.2s ease-out;
+  animation: glowPulse 1.5s infinite ease-in-out;
+}
+
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+    background-color: rgba(239, 68, 68, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.95);
+    background-color: rgba(239, 68, 68, 0.38);
+  }
+  100% {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+    background-color: rgba(239, 68, 68, 0.18);
+  }
+}
+
+/* Loading/Error States */
+.document-loading-state, .sidebar-loading, .sidebar-error, .sidebar-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.document-loading-state {
+  height: 100%;
+  color: #eeeeee;
+}
+
+.loader-ring {
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border-left-color: #ffffff;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+.spinner {
+  border: 3px solid rgba(106, 27, 154, 0.1);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border-left-color: var(--brand-purple);
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.sidebar-error {
+  color: var(--danger);
+}
+
+.error-icon {
+  margin-bottom: 8px;
+}
+
+.sidebar-empty {
+  font-style: italic;
+  color: var(--text-muted);
+}
