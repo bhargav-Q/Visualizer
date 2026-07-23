@@ -14,4 +14,4 @@ const StatsCards = ({ metrics }) => {
   );
 };
 
-export default StatsCards;
+export default React.memo(StatsCards);

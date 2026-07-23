@@ -73,6 +73,8 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
   useEffect(() => {
     if (!pdfLibLoaded) return;
 
+    let activeDoc = null;
+
     const loadPdf = async () => {
       try {
         const url = `http://localhost:8000/api/documents/${encodeURIComponent(fileName)}/pdf`;
@@ -81,6 +83,7 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
           withCredentials: true
         });
         const doc = await loadingTask.promise;
+        activeDoc = doc;
         setPdfDoc(doc);
         setNumPages(doc.numPages);
       } catch (err) {
@@ -90,6 +93,12 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
     };
 
     loadPdf();
+
+    return () => {
+      if (activeDoc) {
+        activeDoc.destroy();
+      }
+    };
   }, [pdfLibLoaded, fileName]);
 
   // Handle scrolling to page
@@ -262,6 +271,9 @@ const PdfPageRenderer = ({ pdfDoc, pageNum, activeMetric, setPageRef }) => {
         
         renderTask = page.render(renderContext);
         await renderTask.promise;
+        if (typeof page.cleanup === 'function') {
+          page.cleanup();
+        }
         setRendered(true);
       } catch (err) {
         console.error(`Error rendering page ${pageNum}:`, err);

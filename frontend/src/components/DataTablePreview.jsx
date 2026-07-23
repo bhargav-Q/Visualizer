@@ -150,4 +150,4 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
   );
 };
 
-export default DataTablePreview;
+export default React.memo(DataTablePreview);

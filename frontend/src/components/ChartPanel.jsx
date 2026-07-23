@@ -116,4 +116,4 @@ const ChartPanel = ({ charts }) => {
   );
 };
 
-export default ChartPanel;
+export default React.memo(ChartPanel);

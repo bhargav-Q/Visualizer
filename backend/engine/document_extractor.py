@@ -64,10 +64,13 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
         for i, page in enumerate(doc):
             page_num = i + 1
             
-            # Render page to PNG for Vision LLM payload
-            pix = page.get_pixmap(dpi=150)
-            png_bytes = pix.tobytes("png")
-            page_pngs.append((page_num, png_bytes, page.get_text().strip()))
+            page_text = page.get_text().strip()
+
+            # Render page to PNG for Vision LLM payload only if text is sparse (<150 chars) or for 1-2 page forms
+            if len(page_text) < 150 or len(doc) <= 2:
+                pix = page.get_pixmap(dpi=150)
+                png_bytes = pix.tobytes("png")
+                page_pngs.append((page_num, png_bytes, page_text))
 
             # Extract spatial text blocks with bounding boxes
             blocks = []

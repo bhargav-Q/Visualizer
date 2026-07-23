@@ -13,14 +13,26 @@ logger = logging.getLogger(__name__)
 # Global reentrant thread lock for DuckDB write operations
 db_write_lock = threading.Lock()
 
+# Persistent shared connection for read operations
+_READ_CONN = None
+_READ_CONN_LOCK = threading.Lock()
+
 # Ensure data directory exists
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = str(DATA_DIR / "app_data.duckdb")
 
 def get_db_connection():
-    """Returns a connection to the embedded DuckDB database."""
+    """Returns a fresh connection to the embedded DuckDB database for write operations."""
     return duckdb.connect(DB_PATH)
+
+def get_read_db_connection():
+    """Returns a shared, persistent read connection to DuckDB."""
+    global _READ_CONN
+    with _READ_CONN_LOCK:
+        if _READ_CONN is None:
+            _READ_CONN = duckdb.connect(DB_PATH)
+        return _READ_CONN
 
 def init_db():
     """Initializes the DuckDB document_metrics table schema."""
@@ -161,9 +173,9 @@ def save_document_analytics(file_name: str, analytics: DocumentAnalytics) -> int
         return inserted_count
 
 def get_metrics_by_file(file_name: str) -> List[Dict[str, Any]]:
-    """Retrieves all metric entries for a specified file from DuckDB."""
+    """Retrieves all metric entries for a specified file from DuckDB using persistent read handle."""
     init_db()
-    conn = get_db_connection()
+    conn = get_read_db_connection()
     try:
         res = conn.execute("""
             SELECT id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json, page_width, page_height, created_at
@@ -193,13 +205,11 @@ def get_metrics_by_file(file_name: str) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error querying DuckDB metrics for file '{file_name}': {e}")
         return []
-    finally:
-        conn.close()
 
 def get_analytics_summary() -> Dict[str, Any]:
     """Returns high-level DuckDB analytical metrics across all ingested documents."""
     init_db()
-    conn = get_db_connection()
+    conn = get_read_db_connection()
     try:
         total_files = conn.execute("SELECT COUNT(DISTINCT file_name) FROM document_metrics").fetchone()[0]
         total_metrics = conn.execute("SELECT COUNT(*) FROM document_metrics WHERE data_type = 'metric'").fetchone()[0]
@@ -223,21 +233,17 @@ def get_analytics_summary() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error executing DuckDB analytics summary: {e}")
         return {"total_files": 0, "total_metrics": 0, "avg_metric_value": 0.0, "top_categories": []}
-    finally:
-        conn.close()
 
 def get_cached_analytics(file_hash: str) -> dict | None:
     """Retrieves cached analytics JSON from DuckDB by file hash."""
     init_db()
-    conn = get_db_connection()
+    conn = get_read_db_connection()
     try:
         res = conn.execute("SELECT analytics_json FROM document_cache WHERE file_hash = ?", [file_hash]).fetchone()
         if res:
             return json.loads(res[0])
     except Exception as e:
         logger.error(f"Error querying DuckDB cache for hash '{file_hash}': {e}")
-    finally:
-        conn.close()
     return None
 
 def save_cached_analytics(file_hash: str, file_name: str, analytics_dict: dict):
