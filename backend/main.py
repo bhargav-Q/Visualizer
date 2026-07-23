@@ -17,6 +17,8 @@ from processors.ocr_processor import extract_tables_from_text, parse_tsv_grid
 # Suppress harmless pdfminer warnings about fonts
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
+logger = logging.getLogger(__name__)
+
 # Load environment variables (NVIDIA_API_KEY)
 load_dotenv()
 
@@ -199,7 +201,11 @@ async def upload_file(file: UploadFile = File(...)):
                 future_table = executor.submit(extract_tables_from_text, raw_text)
 
                 text_data = future_text.result()
-                raw_table = future_table.result()
+                try:
+                    raw_table = future_table.result()
+                except Exception as table_err:
+                    logger.warning(f"DeepSeek table extraction failed for TXT file, falling back to TSV backstop: {table_err}")
+                    raw_table = None
 
             tabular_data = None
             data_category = "text"

@@ -9,6 +9,7 @@ def parse_image(file: UploadFile) -> dict:
     Opens uploaded image files (.png, .jpg, .jpeg, .webp, .tiff) using PyMuPDF (fitz)
     and extracts text content.
     """
+    file.file.seek(0)
     file_bytes = file.file.read()
     file.file.seek(0)
     
