@@ -141,7 +141,7 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
 
     results = []
     if page_pngs:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(page_pngs), 8)) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(page_pngs), 2)) as pool:
             futures = {
                 pool.submit(process_page_vision, p_num, png, txt): p_num
                 for p_num, png, txt in page_pngs

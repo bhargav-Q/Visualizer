@@ -148,7 +148,8 @@ CRITICAL EXTRACTION RULES:
                             clean_rows = []
                             for row in t["rows"]:
                                 if isinstance(row, list):
-                                    clean_rows.append([str(c) if c is not None else "" for c in row])
+                                    clean_row = [str(cell) if cell is not None else "" for cell in row]
+                                    clean_rows.append(clean_row)
                             t["rows"] = clean_rows
                             sanitized_tbls.append(t)
                     data["tables"] = sanitized_tbls
@@ -162,9 +163,15 @@ CRITICAL EXTRACTION RULES:
 
         except json.JSONDecodeError as json_err:
             logger.warning(f"Vision LLM JSON parse error on attempt {attempt}: {json_err}")
+            if attempt < max_retries:
+                time.sleep(2)
         except Exception as err:
             logger.warning(f"Vision LLM API error on attempt {attempt}: {err}")
-            if attempt < max_retries:
-                time.sleep(2 ** attempt) # Exponential backoff
+            status_code = getattr(err, "status_code", None)
+            if status_code in (429, 503) or "503" in str(err) or "429" in str(err) or "ResourceExhausted" in str(err):
+                logger.info(f"Rate limit or service unavailable detected (status {status_code}). Sleeping 2 seconds before retry...")
+                time.sleep(2)
+            elif attempt < max_retries:
+                time.sleep(2 ** attempt) # Exponential backoff for other transient errors
 
     return None
