@@ -3,10 +3,10 @@ from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Any
 
 class ExtractedMetric(BaseModel):
-    category: str = Field(default="General Metric", description="Name or grouping category of the metric")
+    category: Optional[str] = Field(default="General Metric", description="Name or grouping category of the metric")
     metric_value: float = Field(default=0.0, description="Numerical value extracted from text or table")
     unit: Optional[str] = Field(default=None, description="Unit of measurement e.g., USD, %, kg, units")
-    context_snippet: str = Field(default="", description="Exact phrase/sentence supporting this metric")
+    context_snippet: Optional[str] = Field(default="", description="Exact phrase/sentence supporting this metric")
     page_number: Optional[int] = Field(default=1, description="Source page number where metric appears")
     bbox: Optional[List[float]] = Field(default=None, description="Spatial bounding box coordinates [x0, y0, x1, y1]")
     page_width: Optional[float] = Field(default=None, description="Standard page width in points")
@@ -36,9 +36,9 @@ class ExtractedMetric(BaseModel):
         return 0.0
 
 class KeyValuePair(BaseModel):
-    key_name: str = Field(default="Attribute", description="Attribute or label name extracted from text")
-    value: str = Field(default="", description="Textual or code value corresponding to key_name")
-    context_snippet: str = Field(default="", description="Supporting sentence or paragraph snippet")
+    key_name: Optional[str] = Field(default="Attribute", description="Attribute or label name extracted from text")
+    value: Optional[str] = Field(default="", description="Textual or code value corresponding to key_name")
+    context_snippet: Optional[str] = Field(default="", description="Supporting sentence or paragraph snippet")
     page_number: Optional[int] = Field(default=1, description="Source page number")
 
     @field_validator("key_name", "value", "context_snippet", mode="before")
@@ -77,7 +77,7 @@ class ExtractedTable(BaseModel):
         return clean_matrix
 
 class DocumentAnalytics(BaseModel):
-    document_title: str = Field(default="Untitled Document", description="Extracted document title")
+    document_title: Optional[str] = Field(default="Untitled Document", description="Extracted document title")
     report_date: Optional[str] = Field(default=None, description="Extracted document date")
     summary: Optional[str] = Field(default="", description="Executive summary of document")
     keywords: List[str] = Field(default_factory=list, description="Key topics and words")
