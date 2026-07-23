@@ -157,4 +157,55 @@ def test_resource_manager_worker_pool():
     assert executor is not None
 
 
+def test_extract_page_with_nemotron_sectioned(mocker):
+    from processors.ocr_processor import extract_page_with_nemotron_sectioned
+    mock_page = MagicMock()
+    mock_page.rect = MagicMock(y0=0, y1=100, x0=0, x1=100)
+    mock_pix = MagicMock()
+    mock_pix.tobytes.return_value = b"somebytes"
+    mock_page.get_pixmap.return_value = mock_pix
+    
+    mock_extract = mocker.patch("processors.ocr_processor.extract_tables_with_nemotron_ocr")
+    mock_extract.return_value = {
+        "data": [{
+            "text_detections": [
+                {"text_prediction": {"text": "hello"}},
+                {"text_prediction": {"text": "world"}}
+            ]
+        }]
+    }
+    
+    res = extract_page_with_nemotron_sectioned(mock_page)
+    assert res == ["hello", "world"]
+
+
+def test_extract_page_with_nemotron_sectioned_fallback(mocker):
+    from processors.ocr_processor import extract_page_with_nemotron_sectioned
+    mock_page = MagicMock()
+    mock_page.rect = MagicMock(y0=0, y1=100, x0=0, x1=100)
+    mock_pix = MagicMock()
+    mock_pix.tobytes.return_value = b"somebytes"
+    mock_page.get_pixmap.return_value = mock_pix
+    
+    # Force the main call to fail
+    mock_extract = mocker.patch("processors.ocr_processor.extract_tables_with_nemotron_ocr")
+    mock_extract.return_value = None
+    
+    # Mock get_ocr_engine to return None (no local OCR available) to test falling back through to Vision LLM
+    mock_get_ocr = mocker.patch("parsers.pdf_parser.get_ocr_engine")
+    mock_get_ocr.return_value = None
+    
+    # Mock Vision LLM
+    mock_vision = mocker.patch("engine.vision_client.extract_analytics_with_vision")
+    mock_analytics = MagicMock()
+    mock_analytics.summary = "Summary text"
+    mock_analytics.metrics = [MagicMock(context_snippet="Metric snippet")]
+    mock_analytics.key_value_pairs = [MagicMock(context_snippet="KV snippet")]
+    mock_vision.return_value = mock_analytics
+    
+    res = extract_page_with_nemotron_sectioned(mock_page)
+    assert res == ["Summary text", "Metric snippet", "KV snippet"]
+
+
+
 
