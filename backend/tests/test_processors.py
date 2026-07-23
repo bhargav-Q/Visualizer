@@ -132,3 +132,29 @@ def test_nemotron_ocr_v2_endpoint_mock(mocker):
     assert res == {"detected_elements": ["Table 1"]}
 
 
+def test_resource_manager_worker_pool():
+    """Test resource manager CPU-bounded worker pool calculation and list chunking."""
+    from processors.resource_manager import get_resource_stats, chunk_list, get_global_executor
+    import os
+
+    stats = get_resource_stats()
+    expected_cores = os.cpu_count() or 4
+    expected_workers = max(1, expected_cores - 1)
+
+    assert stats["total_cores"] == expected_cores
+    assert stats["max_workers"] == expected_workers
+
+    # Test chunking helper
+    items = list(range(12))
+    chunks = list(chunk_list(items, chunk_size=5))
+    assert len(chunks) == 3
+    assert chunks[0] == [0, 1, 2, 3, 4]
+    assert chunks[1] == [5, 6, 7, 8, 9]
+    assert chunks[2] == [10, 11]
+
+    # Test global executor
+    executor = get_global_executor()
+    assert executor is not None
+
+
+

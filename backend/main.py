@@ -33,12 +33,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from processors.resource_manager import CONCURRENCY_SEMAPHORE
-
 @app.post("/api/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...)):
-    async with CONCURRENCY_SEMAPHORE:
-        start_time = time.time()
+    start_time = time.time()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
         
@@ -92,27 +89,24 @@ async def upload_file(file: UploadFile = File(...)):
             
             parsed_data = parse_pdf(file)
 
-            # Run Text Summary and Table Extraction concurrently in parallel
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                future_text = executor.submit(
-                    process_text,
-                    raw_text=parsed_data["text"],
-                    page_count=parsed_data["page_count"],
-                    paragraph_count=None
-                )
-                table_input_text = parsed_data.get("structured_tsv") or parsed_data["text"]
-                future_table = executor.submit(extract_tables_from_text, table_input_text)
+            # Run Text Summary and Table Extraction using global CPU-bounded worker pool
+            from processors.resource_manager import get_global_executor
+            executor = get_global_executor()
+            future_text = executor.submit(
+                process_text,
+                raw_text=parsed_data["text"],
+                page_count=parsed_data["page_count"],
+                paragraph_count=None
+            )
+            table_input_text = parsed_data.get("structured_tsv") or parsed_data["text"]
+            future_table = executor.submit(extract_tables_from_text, table_input_text)
 
-                text_data = future_text.result()
-                # Problem 5 Fix: Wrap table extraction result in try/except so DeepSeek
-                # timeouts gracefully fall through to the TSV backstop instead of killing
-                # the entire request with a 422 error.
-                try:
-                    raw_table = future_table.result()
-                except Exception as table_err:
-                    logger.warning(f"DeepSeek table extraction failed, falling back to TSV backstop: {table_err}")
-                    raw_table = None
-
+            text_data = future_text.result()
+            try:
+                raw_table = future_table.result()
+            except Exception as table_err:
+                logger.warning(f"DeepSeek table extraction failed, falling back to TSV backstop: {table_err}")
+                raw_table = None
 
             # Gap 2 Fix: Deterministic TSV Table Fallback Backstop
             if not raw_table or not raw_table.get("rows"):
@@ -137,31 +131,27 @@ async def upload_file(file: UploadFile = File(...)):
 
     elif filename.endswith((".docx", ".doc")):
         try:
-            import concurrent.futures
-            
             parsed_data = parse_docx(file)
             raw_text = parsed_data.get("text", "")
             paragraph_count = parsed_data.get("paragraph_count")
 
-            # Run Text Summary and Table Extraction concurrently in parallel
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                future_text = executor.submit(
-                    process_text,
-                    raw_text=raw_text,
-                    page_count=None,
-                    paragraph_count=paragraph_count
-                )
-                # Problem 4 Fix: Route DOCX structured_tsv to table extractor (same as PDF pathway)
-                table_input_text = parsed_data.get("structured_tsv") or raw_text
-                future_table = executor.submit(extract_tables_from_text, table_input_text)
+            from processors.resource_manager import get_global_executor
+            executor = get_global_executor()
+            future_text = executor.submit(
+                process_text,
+                raw_text=raw_text,
+                page_count=None,
+                paragraph_count=paragraph_count
+            )
+            table_input_text = parsed_data.get("structured_tsv") or raw_text
+            future_table = executor.submit(extract_tables_from_text, table_input_text)
 
-                text_data = future_text.result()
-                # Problem 5 Fix: Wrap table extraction result in try/except for timeout resilience
-                try:
-                    raw_table = future_table.result()
-                except Exception as table_err:
-                    logger.warning(f"DeepSeek table extraction failed for DOCX, falling back to TSV backstop: {table_err}")
-                    raw_table = None
+            text_data = future_text.result()
+            try:
+                raw_table = future_table.result()
+            except Exception as table_err:
+                logger.warning(f"DeepSeek table extraction failed for DOCX, falling back to TSV backstop: {table_err}")
+                raw_table = None
 
             # DOCX TSV Fallback Backstop (matching PDF pathway)
             if not raw_table or not raw_table.get("rows"):
@@ -187,27 +177,26 @@ async def upload_file(file: UploadFile = File(...)):
 
     elif filename.endswith(".txt"):
         try:
-            import concurrent.futures
-
             parsed_data = parse_txt(file)
             raw_text = parsed_data.get("text", "")
             paragraph_count = parsed_data.get("paragraph_count")
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                future_text = executor.submit(
-                    process_text,
-                    raw_text=raw_text,
-                    page_count=None,
-                    paragraph_count=paragraph_count
-                )
-                future_table = executor.submit(extract_tables_from_text, raw_text)
+            from processors.resource_manager import get_global_executor
+            executor = get_global_executor()
+            future_text = executor.submit(
+                process_text,
+                raw_text=raw_text,
+                page_count=None,
+                paragraph_count=paragraph_count
+            )
+            future_table = executor.submit(extract_tables_from_text, raw_text)
 
-                text_data = future_text.result()
-                try:
-                    raw_table = future_table.result()
-                except Exception as table_err:
-                    logger.warning(f"DeepSeek table extraction failed for TXT file, falling back to TSV backstop: {table_err}")
-                    raw_table = None
+            text_data = future_text.result()
+            try:
+                raw_table = future_table.result()
+            except Exception as table_err:
+                logger.warning(f"DeepSeek table extraction failed for TXT file, falling back to TSV backstop: {table_err}")
+                raw_table = None
 
             tabular_data = None
             data_category = "text"

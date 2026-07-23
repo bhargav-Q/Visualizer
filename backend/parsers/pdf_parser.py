@@ -41,57 +41,56 @@ def parse_pdf(file: UploadFile) -> dict:
         page_count = len(doc)
         ocr_engine = get_ocr_engine()
         
-        from processors.resource_manager import force_garbage_collection
+        # Process pages in controlled chunks of 5 pages to prevent RAM spikes
+        from processors.resource_manager import chunk_list, collect_garbage
 
-        for i, page in enumerate(doc):
-            native_text = page.get_text().strip()
-            images = page.get_images()
-            
-            ocr_text = ""
-            grid_rows = []
-            
-            # Trigger OCR if page has sparse/empty text (<20 chars) or contains embedded image blocks
-            # Problem 1 Fix: Trigger OCR on sparse text (<50 chars) OR embedded images.
-            # This catches flat-raster scanned pages where PyMuPDF reports 0 images and 0 text.
-            if (len(native_text) < 50 or len(images) > 0) and ocr_engine:
-                try:
-                    from parsers.spatial_grid import reconstruct_grid_from_ocr, run_ocr_with_orientation_check
-                    results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
-                    if results:
-                        grid_rows, tsv_output = reconstruct_grid_from_ocr(results)
-                        
-                        # Gap 3: Multi-page Header Deduplication
-                        if grid_rows:
-                            first_line = "\t".join(grid_rows[0]).strip()
-                            if canonical_header_line is None:
-                                canonical_header_line = first_line
-                            elif first_line == canonical_header_line:
-                                # Drop duplicate header row on subsequent pages
-                                grid_rows = grid_rows[1:]
-                                tsv_output = "\n".join(["\t".join(r) for r in grid_rows])
+        for chunk_idx, page_chunk in enumerate(chunk_list(list(doc), chunk_size=5)):
+            for offset, page in enumerate(page_chunk):
+                i = chunk_idx * 5 + offset
+                native_text = page.get_text().strip()
+                images = page.get_images()
+                
+                ocr_text = ""
+                grid_rows = []
+                
+                # Trigger OCR if page has sparse/empty text (<50 chars) OR embedded images
+                if (len(native_text) < 50 or len(images) > 0) and ocr_engine:
+                    try:
+                        from parsers.spatial_grid import reconstruct_grid_from_ocr, run_ocr_with_orientation_check
+                        results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
+                        if results:
+                            grid_rows, tsv_output = reconstruct_grid_from_ocr(results)
+                            
+                            # Multi-page Header Deduplication
+                            if grid_rows:
+                                first_line = "\t".join(grid_rows[0]).strip()
+                                if canonical_header_line is None:
+                                    canonical_header_line = first_line
+                                elif first_line == canonical_header_line:
+                                    # Drop duplicate header row on subsequent pages
+                                    grid_rows = grid_rows[1:]
+                                    tsv_output = "\n".join(["\t".join(r) for r in grid_rows])
 
-                        ocr_text = tsv_output.strip()
-                except Exception as e:
-                    logger.warning(f"OCR error on PDF page {i+1}: {e}")
+                            ocr_text = tsv_output.strip()
+                    except Exception as e:
+                        logger.warning(f"OCR error on PDF page {i+1}: {e}")
 
-            # Combine native text and OCR text cleanly without duplication
-            page_content = native_text
-            if ocr_text:
-                if not page_content:
-                    page_content = ocr_text
-                elif ocr_text not in page_content and len(ocr_text) > len(page_content):
-                    page_content = native_text + "\n" + ocr_text
-                structured_tsv_pages.append(ocr_text)
+                # Combine native text and OCR text cleanly without duplication
+                page_content = native_text
+                if ocr_text:
+                    if not page_content:
+                        page_content = ocr_text
+                    elif ocr_text not in page_content and len(ocr_text) > len(page_content):
+                        page_content = native_text + "\n" + ocr_text
+                    structured_tsv_pages.append(ocr_text)
 
-            if page_content:
-                full_text_pages.append(f"--- Page {i+1} ---\n" + page_content)
+                if page_content:
+                    full_text_pages.append(f"--- Page {i+1} ---\n" + page_content)
 
-            # Trigger chunk garbage collection every 5 pages to release pixmap memory
-            if (i + 1) % 5 == 0:
-                force_garbage_collection()
+            # Release bitmap RAM memory after each 5-page chunk
+            collect_garbage()
 
         doc.close()
-        force_garbage_collection()
 
         # Problem 3 Fix: Deduplicate repeated header lines from digital text pages.
         # Multi-page PDFs often repeat the same table header row on every page.
