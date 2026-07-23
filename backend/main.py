@@ -113,7 +113,6 @@ async def upload_file(file: UploadFile = File(...)):
 
             # Gap 2 Fix: Deterministic TSV Table Fallback Backstop
             if not raw_table or not raw_table.get("rows"):
-                from processors.ocr_processor import parse_tsv_grid
                 raw_table = parse_tsv_grid(parsed_data.get("structured_tsv") or parsed_data["text"])
 
             tabular_data = None
