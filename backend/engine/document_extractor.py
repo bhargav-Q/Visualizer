@@ -50,19 +50,24 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
     3. Matches extracted metric snippets to bounding box coordinates.
     """
     import pymupdf
+    import time
+    import concurrent.futures
+    from engine.vision_client import extract_analytics_with_vision
 
+    t_start = time.perf_counter()
     page_text_blocks_by_page = {}
     full_text_pages = []
-    first_page_png = None
+    page_pngs = []
 
     try:
         doc = pymupdf.open(stream=contents, filetype="pdf")
         for i, page in enumerate(doc):
             page_num = i + 1
-            # Render first page to PNG for Vision LLM payload
-            if i == 0:
-                pix = page.get_pixmap(dpi=150)
-                first_page_png = pix.tobytes("png")
+            
+            # Render page to PNG for Vision LLM payload
+            pix = page.get_pixmap(dpi=150)
+            png_bytes = pix.tobytes("png")
+            page_pngs.append((page_num, png_bytes, page.get_text().strip()))
 
             # Extract spatial text blocks with bounding boxes
             blocks = []
@@ -77,6 +82,7 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
 
             # Check if we should fall back to OCR coordinates for scanned/image pages
             if len(blocks) < 2 or sum(len(b["text"]) for b in blocks) < 50:
+                t_ocr_start = time.perf_counter()
                 try:
                     from parsers.pdf_parser import get_ocr_engine
                     ocr_engine = get_ocr_engine()
@@ -103,6 +109,7 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
                                         ],
                                         "text": text
                                     })
+                    logger.info(f"[PROFILER] Page {page_num} OCR fallback elapsed time: {time.perf_counter() - t_ocr_start:.4f}s")
                 except Exception as ocr_err:
                     logger.warning(f"Failed to run OCR fallback blocks on page {page_num}: {ocr_err}")
 
@@ -120,17 +127,93 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
         logger.warning(f"PyMuPDF error reading '{filename}': {pdf_err}")
 
     raw_combined_text = "\n\n".join(full_text_pages)
+    logger.info(f"[PROFILER] Native PDF Text & Spatial Blocks Extraction: {time.perf_counter() - t_start:.4f}s")
 
-    # 2. Vision LLM extraction
+    # 2. Parallel Vision LLM page batching extraction
+    t_vision_start = time.perf_counter()
+    
+    def process_page_vision(p_num, png, text_hint):
+        try:
+            return p_num, extract_analytics_with_vision(png, text_hint=text_hint[:3000])
+        except Exception as vision_err:
+            logger.warning(f"Parallel Vision LLM call failed for page {p_num}: {vision_err}")
+            return p_num, None
+
+    results = []
+    if page_pngs:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(page_pngs), 8)) as pool:
+            futures = {
+                pool.submit(process_page_vision, p_num, png, txt): p_num
+                for p_num, png, txt in page_pngs
+            }
+            for future in concurrent.futures.as_completed(futures):
+                p_num = futures[future]
+                try:
+                    p_num, page_an = future.result()
+                    if page_an:
+                        results.append((p_num, page_an))
+                except Exception as exc:
+                    logger.warning(f"Page {p_num} vision thread generated exception: {exc}")
+
+    # Sort results by page number to keep order
+    results.sort(key=lambda x: x[0])
+    
+    logger.info(f"[PROFILER] Parallel Vision LLM page batching runtime: {time.perf_counter() - t_vision_start:.4f}s")
+
+    # Merge results
     analytics = None
-    if first_page_png:
-        analytics = extract_analytics_with_vision(first_page_png, text_hint=raw_combined_text[:3000])
+    if results:
+        # Use first page's document_title and report_date as anchor details
+        first_p, first_an = results[0]
+        
+        # Combine summaries
+        summaries = []
+        for p_num, an in results:
+            if an.summary and an.summary.strip():
+                summaries.append(f"[Page {p_num}] {an.summary.strip()}")
+        combined_summary = "\n\n".join(summaries) if summaries else first_an.summary
 
-    # Fallback to local heuristic parsing if LLM vision returns None
-    if not analytics:
+        # Union keywords
+        keywords_set = set()
+        for p_num, an in results:
+            if an.keywords:
+                keywords_set.update(an.keywords)
+
+        # Merge metrics, key_value_pairs, and tables (assigning/updating page number mapping)
+        merged_metrics = []
+        merged_kv_pairs = []
+        merged_tables = []
+
+        for p_num, an in results:
+            if an.metrics:
+                for m in an.metrics:
+                    m.page_number = p_num
+                    merged_metrics.append(m)
+            if an.key_value_pairs:
+                for kv in an.key_value_pairs:
+                    kv.page_number = p_num
+                    merged_kv_pairs.append(kv)
+            if an.tables:
+                for tbl in an.tables:
+                    tbl.page_number = p_num
+                    merged_tables.append(tbl)
+
+        analytics = DocumentAnalytics(
+            document_title=first_an.document_title or "Untitled Document",
+            report_date=first_an.report_date,
+            summary=combined_summary,
+            keywords=list(keywords_set),
+            metrics=merged_metrics,
+            key_value_pairs=merged_kv_pairs,
+            tables=merged_tables
+        )
+    else:
+        # Fallback to local heuristics if no vision calls returned valid results
+        logger.warning("[WARNING] No Vision LLM responses received. Executing heuristic fallback parsing.")
         analytics = create_heuristic_fallback_analytics(filename, raw_combined_text)
 
     # 3. Match metrics to bounding boxes
+    t_match_start = time.perf_counter()
     for m in analytics.metrics:
         p_num = m.page_number or 1
         page_info = page_text_blocks_by_page.get(p_num) or page_text_blocks_by_page.get(1)
@@ -141,6 +224,7 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
             matched_bbox = match_text_to_bbox(blocks, m.context_snippet)
             if matched_bbox:
                 m.bbox = matched_bbox
+    logger.info(f"[PROFILER] Spatial Bounding Box Match Heuristics: {time.perf_counter() - t_match_start:.4f}s")
 
     return analytics
 
