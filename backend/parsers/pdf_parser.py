@@ -41,6 +41,8 @@ def parse_pdf(file: UploadFile) -> dict:
         page_count = len(doc)
         ocr_engine = get_ocr_engine()
         
+        from processors.resource_manager import force_garbage_collection
+
         for i, page in enumerate(doc):
             native_text = page.get_text().strip()
             images = page.get_images()
@@ -84,7 +86,12 @@ def parse_pdf(file: UploadFile) -> dict:
             if page_content:
                 full_text_pages.append(f"--- Page {i+1} ---\n" + page_content)
 
+            # Trigger chunk garbage collection every 5 pages to release pixmap memory
+            if (i + 1) % 5 == 0:
+                force_garbage_collection()
+
         doc.close()
+        force_garbage_collection()
 
         # Problem 3 Fix: Deduplicate repeated header lines from digital text pages.
         # Multi-page PDFs often repeat the same table header row on every page.

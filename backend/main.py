@@ -33,9 +33,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from processors.resource_manager import CONCURRENCY_SEMAPHORE
+
 @app.post("/api/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...)):
-    start_time = time.time()
+    async with CONCURRENCY_SEMAPHORE:
+        start_time = time.time()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
         
