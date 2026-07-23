@@ -12,6 +12,13 @@ class ExtractedMetric(BaseModel):
     page_width: Optional[float] = Field(default=None, description="Standard page width in points")
     page_height: Optional[float] = Field(default=None, description="Standard page height in points")
 
+    @field_validator("category", "context_snippet", mode="before")
+    @classmethod
+    def parse_str_fields(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
+
     @field_validator("metric_value", mode="before")
     @classmethod
     def parse_metric_value(cls, v: Any) -> float:
@@ -34,7 +41,7 @@ class KeyValuePair(BaseModel):
     context_snippet: str = Field(default="", description="Supporting sentence or paragraph snippet")
     page_number: Optional[int] = Field(default=1, description="Source page number")
 
-    @field_validator("key_name", "value", mode="before")
+    @field_validator("key_name", "value", "context_snippet", mode="before")
     @classmethod
     def parse_str_fields(cls, v: Any) -> str:
         """Coerces integers, floats, or objects into clean strings."""
@@ -77,6 +84,13 @@ class DocumentAnalytics(BaseModel):
     metrics: List[ExtractedMetric] = Field(default_factory=list, description="All numerical metrics")
     key_value_pairs: List[KeyValuePair] = Field(default_factory=list, description="Extracted key-value facts")
     tables: List[ExtractedTable] = Field(default_factory=list, description="Extracted table grids")
+
+    @field_validator("document_title", "summary", mode="before")
+    @classmethod
+    def parse_str_fields(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
 
     @field_validator("keywords", mode="before")
     @classmethod
