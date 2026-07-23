@@ -83,15 +83,16 @@ async def upload_file(file: UploadFile = File(...)):
     elif filename.endswith(".pdf"):
         try:
             import concurrent.futures
-            # Read file bytes once for both text parsing and table extraction
             file_bytes = file.file.read()
             file.file.seek(0)
             
             parsed_data = parse_pdf(file)
 
-            # Run Text Summary and Table Extraction using global CPU-bounded worker pool
+            # Run Text Summary, Table Extraction, and Unstructured Document Extraction concurrently
             from processors.resource_manager import get_global_executor
+            from engine.document_extractor import process_unstructured_document
             executor = get_global_executor()
+            
             future_text = executor.submit(
                 process_text,
                 raw_text=parsed_data["text"],
@@ -100,6 +101,7 @@ async def upload_file(file: UploadFile = File(...)):
             )
             table_input_text = parsed_data.get("structured_tsv") or parsed_data["text"]
             future_table = executor.submit(extract_tables_from_text, table_input_text)
+            future_analytics = executor.submit(process_unstructured_document, file)
 
             text_data = future_text.result()
             try:
@@ -108,7 +110,14 @@ async def upload_file(file: UploadFile = File(...)):
                 logger.warning(f"DeepSeek table extraction failed, falling back to TSV backstop: {table_err}")
                 raw_table = None
 
-            # Gap 2 Fix: Deterministic TSV Table Fallback Backstop
+            try:
+                analytics_result = future_analytics.result()
+                analytics_data = analytics_result.get("analytics")
+            except Exception as analytics_err:
+                logger.warning(f"Analytics extraction failed: {analytics_err}")
+                analytics_data = None
+
+            # Deterministic TSV Table Fallback Backstop
             if not raw_table or not raw_table.get("rows"):
                 raw_table = parse_tsv_grid(parsed_data.get("structured_tsv") or parsed_data["text"])
 
@@ -124,6 +133,7 @@ async def upload_file(file: UploadFile = File(...)):
                 data_category=data_category,
                 tabular=tabular_data,
                 text=text_data,
+                analytics=analytics_data,
                 processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
@@ -136,7 +146,9 @@ async def upload_file(file: UploadFile = File(...)):
             paragraph_count = parsed_data.get("paragraph_count")
 
             from processors.resource_manager import get_global_executor
+            from engine.document_extractor import process_unstructured_document
             executor = get_global_executor()
+            
             future_text = executor.submit(
                 process_text,
                 raw_text=raw_text,
@@ -145,6 +157,7 @@ async def upload_file(file: UploadFile = File(...)):
             )
             table_input_text = parsed_data.get("structured_tsv") or raw_text
             future_table = executor.submit(extract_tables_from_text, table_input_text)
+            future_analytics = executor.submit(process_unstructured_document, file)
 
             text_data = future_text.result()
             try:
@@ -152,6 +165,13 @@ async def upload_file(file: UploadFile = File(...)):
             except Exception as table_err:
                 logger.warning(f"DeepSeek table extraction failed for DOCX, falling back to TSV backstop: {table_err}")
                 raw_table = None
+
+            try:
+                analytics_result = future_analytics.result()
+                analytics_data = analytics_result.get("analytics")
+            except Exception as analytics_err:
+                logger.warning(f"Analytics extraction failed for DOCX: {analytics_err}")
+                analytics_data = None
 
             # DOCX TSV Fallback Backstop (matching PDF pathway)
             if not raw_table or not raw_table.get("rows"):
@@ -170,6 +190,7 @@ async def upload_file(file: UploadFile = File(...)):
                 data_category=data_category,
                 tabular=tabular_data,
                 text=text_data,
+                analytics=analytics_data,
                 processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
@@ -182,7 +203,9 @@ async def upload_file(file: UploadFile = File(...)):
             paragraph_count = parsed_data.get("paragraph_count")
 
             from processors.resource_manager import get_global_executor
+            from engine.document_extractor import process_unstructured_document
             executor = get_global_executor()
+            
             future_text = executor.submit(
                 process_text,
                 raw_text=raw_text,
@@ -190,6 +213,7 @@ async def upload_file(file: UploadFile = File(...)):
                 paragraph_count=paragraph_count
             )
             future_table = executor.submit(extract_tables_from_text, raw_text)
+            future_analytics = executor.submit(process_unstructured_document, file)
 
             text_data = future_text.result()
             try:
@@ -197,6 +221,13 @@ async def upload_file(file: UploadFile = File(...)):
             except Exception as table_err:
                 logger.warning(f"DeepSeek table extraction failed for TXT file, falling back to TSV backstop: {table_err}")
                 raw_table = None
+
+            try:
+                analytics_result = future_analytics.result()
+                analytics_data = analytics_result.get("analytics")
+            except Exception as analytics_err:
+                logger.warning(f"Analytics extraction failed for TXT: {analytics_err}")
+                analytics_data = None
 
             tabular_data = None
             data_category = "text"
@@ -211,6 +242,7 @@ async def upload_file(file: UploadFile = File(...)):
                 data_category=data_category,
                 tabular=tabular_data,
                 text=text_data,
+                analytics=analytics_data,
                 processing_time=round(time.time() - start_time, 2)
             )
         except Exception as e:
