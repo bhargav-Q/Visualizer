@@ -47,6 +47,22 @@ def test_pydantic_document_analytics_schema():
     assert len(analytics.key_value_pairs) == 1
     assert analytics.key_value_pairs[0].key_name == "Tax ID"
 
+def test_resilient_field_coercion():
+    """Tests field validator coercion for non-float strings and float matrix cells."""
+    # 1. Non-numeric metric values coerce to 0.0 or float
+    m1 = ExtractedMetric(category="Type", metric_value="Wholesale", context_snippet="Type: Wholesale")
+    assert m1.metric_value == 0.0
+
+    m2 = ExtractedMetric(category="Revenue", metric_value="$12,345.67 USD", context_snippet="Rev")
+    assert m2.metric_value == 12345.67
+
+    # 2. Matrix cell float/int values coerce to str
+    tbl = ExtractedTable(
+        headers=["Col1", "Col2"],
+        rows=[[12345.67, 0.15], ["Item A", 100]]
+    )
+    assert tbl.rows == [["12345.67", "0.15"], ["Item A", "100"]]
+
 def test_duckdb_storage_layer():
     """Tests DuckDB app_data.duckdb table creation, insertion, and retrieval."""
     init_db()

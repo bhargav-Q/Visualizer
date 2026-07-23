@@ -122,7 +122,41 @@ CRITICAL EXTRACTION RULES:
                 content = content[start_idx:end_idx+1]
 
             data = json.loads(content)
-            analytics = DocumentAnalytics(**data)
+            try:
+                analytics = DocumentAnalytics(**data)
+            except Exception as val_err:
+                logger.warning(f"Vision LLM Pydantic validation warning on attempt {attempt}: {val_err}. Sanitizing data fields...")
+                # Sanitize dict entries if Pydantic model validation needs relaxation
+                if isinstance(data, dict):
+                    metrics_list = data.get("metrics") or []
+                    sanitized_metrics = []
+                    for m in metrics_list:
+                        if isinstance(m, dict):
+                            val = m.get("metric_value")
+                            try:
+                                float_val = float(str(val).replace("$", "").replace(",", "")) if val is not None else 0.0
+                            except ValueError:
+                                float_val = 0.0
+                            m["metric_value"] = float_val
+                            sanitized_metrics.append(m)
+                    data["metrics"] = sanitized_metrics
+
+                    tbls_list = data.get("tables") or []
+                    sanitized_tbls = []
+                    for t in tbls_list:
+                        if isinstance(t, dict) and isinstance(t.get("rows"), list):
+                            clean_rows = []
+                            for row in t["rows"]:
+                                if isinstance(row, list):
+                                    clean_rows.append([str(c) if c is not None else "" for c in row])
+                            t["rows"] = clean_rows
+                            sanitized_tbls.append(t)
+                    data["tables"] = sanitized_tbls
+
+                    analytics = DocumentAnalytics(**data)
+                else:
+                    raise val_err
+
             logger.info(f"Successfully validated DocumentAnalytics vision response: {len(analytics.metrics)} metrics, {len(analytics.key_value_pairs)} KV pairs, {len(analytics.tables)} tables")
             return analytics
 
