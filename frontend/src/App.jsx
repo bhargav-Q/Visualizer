@@ -63,7 +63,7 @@ function App() {
             <a href="https://github.com/bhargav-Q/Visualizer" target="_blank" rel="noopener noreferrer" className="nav-link">Documentation</a>
           </nav>
 
-          <span className="badge">NVIDIA DeepSeek Powered</span>
+          {/* <span className="badge">NVIDIA DeepSeek Powered</span> */}
           
           {/* <div className="header-demo-buttons">
             <button className="btn-white" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={() => alert("Simulated: Booking a Demo for Visualizer insights.")}>Book a demo</button>
