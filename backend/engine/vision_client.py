@@ -30,12 +30,27 @@ def encode_image_to_base64(image_bytes: bytes) -> str:
     encoded = base64.b64encode(image_bytes).decode("utf-8")
     return f"data:image/png;base64,{encoded}"
 
+_api_disabled_until = 0.0
+
+def is_vision_api_disabled() -> bool:
+    global _api_disabled_until
+    return time.time() < _api_disabled_until
+
+def disable_vision_api(seconds: float = 60.0):
+    global _api_disabled_until
+    _api_disabled_until = time.time() + seconds
+    logger.warning(f"NVIDIA API disabled globally for {seconds} seconds.")
+
 def extract_analytics_with_vision(image_bytes: bytes, text_hint: str = "", max_retries: int = 3) -> Optional[DocumentAnalytics]:
     """
     Sends rendered PNG page image bytes to meta/llama-3.2-11b-vision-instruct
     to extract metrics, key-value pairs, tables, summary, and keywords.
     Enforces strict Pydantic JSON validation with retry backoff.
     """
+    if is_vision_api_disabled():
+        logger.warning("NVIDIA API is temporarily disabled due to rate limit/503 errors.")
+        return None
+
     client = get_openai_client()
     if not client or not image_bytes:
         return None
@@ -168,9 +183,28 @@ CRITICAL EXTRACTION RULES:
         except Exception as err:
             logger.warning(f"Vision LLM API error on attempt {attempt}: {err}")
             status_code = getattr(err, "status_code", None)
+            is_rate_limit = False
+            is_timeout = False
+            
             if status_code in (429, 503) or "503" in str(err) or "429" in str(err) or "ResourceExhausted" in str(err):
-                logger.info(f"Rate limit or service unavailable detected (status {status_code}). Sleeping 2 seconds before retry...")
-                time.sleep(2)
+                is_rate_limit = True
+            
+            # Check for request timeouts
+            if "timeout" in str(err).lower() or "timed out" in str(err).lower() or "timeout" in type(err).__name__.lower():
+                is_timeout = True
+
+            if is_timeout:
+                logger.warning("NVIDIA API request timed out. Disabling API calls globally for 120 seconds to prevent hangs.")
+                disable_vision_api(120.0)
+                break  # Fail fast immediately on timeouts
+
+            if is_rate_limit:
+                if attempt < max_retries:
+                    logger.info(f"Rate limit or service unavailable detected (status {status_code}). Sleeping 2 seconds before retry...")
+                    time.sleep(2)
+                else:
+                    logger.warning("NVIDIA API repeatedly failed with rate limits. Disabling API calls globally for 60 seconds.")
+                    disable_vision_api(60.0)
             elif attempt < max_retries:
                 time.sleep(2 ** attempt) # Exponential backoff for other transient errors
 

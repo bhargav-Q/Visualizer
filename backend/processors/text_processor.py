@@ -20,7 +20,9 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
     fallback_summary = "Summary unavailable — AI service is temporarily down."
     fallback_keywords = []
 
-    if not api_key:
+    from engine.vision_client import is_vision_api_disabled, disable_vision_api
+    
+    if not api_key or is_vision_api_disabled():
         return TextResult(
             summary=fallback_summary,
             keywords=fallback_keywords,
@@ -102,6 +104,15 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
         
     except Exception as e:
         print(f"AI API Error: {e}")
+        status_code = getattr(e, "status_code", None)
+        err_msg = str(e).lower()
+        if status_code in (429, 503) or "503" in err_msg or "429" in err_msg or "resourceexhausted" in err_msg:
+            logger.warning("Text Processor hit rate limit or 503 error. Disabling API calls globally for 60 seconds.")
+            disable_vision_api(60.0)
+        elif "timeout" in err_msg or "timed out" in err_msg or "timeout" in type(e).__name__.lower():
+            logger.warning("Text Processor request timed out. Disabling API calls globally for 120 seconds.")
+            disable_vision_api(120.0)
+            
         return TextResult(
             summary=fallback_summary,
             keywords=fallback_keywords,

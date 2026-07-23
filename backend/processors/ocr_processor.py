@@ -67,8 +67,10 @@ def extract_tables_from_text(raw_text: str) -> dict | None:
 
     from openai import OpenAI
 
-    if not api_key:
-        logger.warning("NVIDIA_API_KEY missing — using deterministic TSV table fallback if available")
+    from engine.vision_client import is_vision_api_disabled, disable_vision_api
+
+    if not api_key or is_vision_api_disabled():
+        logger.warning("NVIDIA_API_KEY missing or API disabled — using deterministic TSV table fallback if available")
         return deterministic_table
 
     try:
@@ -146,6 +148,14 @@ Document Text:
 
     except Exception as e:
         logger.warning(f"DeepSeek AI table extraction error: {e}")
+        status_code = getattr(e, "status_code", None)
+        err_msg = str(e).lower()
+        if status_code in (429, 503) or "503" in err_msg or "429" in err_msg or "resourceexhausted" in err_msg:
+            logger.warning("Table Processor hit rate limit or 503 error. Disabling API calls globally for 60 seconds.")
+            disable_vision_api(60.0)
+        elif "timeout" in err_msg or "timed out" in err_msg or "timeout" in type(e).__name__.lower():
+            logger.warning("Table Processor request timed out. Disabling API calls globally for 120 seconds.")
+            disable_vision_api(120.0)
 
     # Step 2: Fallback to deterministic TSV backstop if DeepSeek fails or returns no table
     if deterministic_table:

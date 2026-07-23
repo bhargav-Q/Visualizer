@@ -53,8 +53,9 @@ def parse_pdf(file: UploadFile) -> dict:
                 ocr_text = ""
                 grid_rows = []
                 
-                # Trigger OCR if page has sparse/empty text (<50 chars) OR embedded images
-                if (len(native_text) < 50 or len(images) > 0) and ocr_engine:
+                # Trigger OCR if page has sparse/empty text (<150 chars).
+                # We ignore embedded images for digital PDFs since logos/decorations are common.
+                if len(native_text) < 150 and ocr_engine:
                     try:
                         from parsers.spatial_grid import reconstruct_grid_from_ocr, run_ocr_with_orientation_check
                         results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
