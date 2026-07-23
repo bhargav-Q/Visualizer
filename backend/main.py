@@ -19,6 +19,13 @@ logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
+from pathlib import Path
+import os
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+DOCUMENTS_DIR = DATA_DIR / "documents"
+DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Load environment variables (NVIDIA_API_KEY)
 load_dotenv()
 
@@ -34,7 +41,7 @@ app.add_middleware(
 )
 
 @app.post("/api/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...)):
+def upload_file(file: UploadFile = File(...)):
     start_time = time.time()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -48,6 +55,17 @@ async def upload_file(file: UploadFile = File(...)):
     
     if file_size > 16 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 16MB.")
+        
+    # Save the file to disk to support PDF visualization serving
+    try:
+        file_bytes = file.file.read()
+        file.file.seek(0)
+        file_path = DOCUMENTS_DIR / os.path.basename(file.filename)
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+        file.file.seek(0)
+    except Exception as save_err:
+        logger.warning(f"Could not save file '{file.filename}' to disk: {save_err}")
     
     if filename.endswith(".xlsx"):
         try:
@@ -258,6 +276,24 @@ async def upload_file(file: UploadFile = File(...)):
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "nvidia_api": "configured"}
+
+@app.get("/api/documents/{file_name}/metrics")
+def get_document_metrics_api(file_name: str):
+    from engine.db import get_metrics_by_file
+    safe_name = os.path.basename(file_name)
+    metrics = get_metrics_by_file(safe_name)
+    if not metrics:
+        raise HTTPException(status_code=404, detail="No metrics found for this document")
+    return metrics
+
+@app.get("/api/documents/{file_name}/pdf")
+def get_document_pdf_api(file_name: str):
+    from fastapi.responses import FileResponse
+    safe_name = os.path.basename(file_name)
+    file_path = DOCUMENTS_DIR / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Source PDF file not found on disk")
+    return FileResponse(file_path, media_type="application/pdf", filename=safe_name)
 
 if __name__ == "__main__":
     import uvicorn
