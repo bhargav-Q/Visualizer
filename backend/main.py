@@ -42,7 +42,7 @@ app.add_middleware(
 
 @app.post("/api/upload", response_model=UploadResponse)
 def upload_file(file: UploadFile = File(...)):
-    start_time = time.time()
+    start_time = time.perf_counter()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
         
@@ -66,34 +66,53 @@ def upload_file(file: UploadFile = File(...)):
         file.file.seek(0)
     except Exception as save_err:
         logger.warning(f"Could not save file '{file.filename}' to disk: {save_err}")
+        file_bytes = b""
+
+    # SHA-256 caching logic
+    import hashlib
+    from engine.db import get_cached_analytics, save_cached_analytics
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    
+    cached_payload = get_cached_analytics(file_hash)
+    if cached_payload:
+        logger.info(f"[PROFILER] Cache HIT for file '{file.filename}' (hash: {file_hash})")
+        cached_payload["file_name"] = file.filename
+        cached_payload["processing_time"] = round(time.perf_counter() - start_time, 4)
+        return UploadResponse(**cached_payload)
+
+    response_payload = None
     
     if filename.endswith(".xlsx"):
         try:
+            t0 = time.perf_counter()
             raw_data = parse_xlsx(file)
             tabular_data = process_tabular_data(raw_data)
-            return UploadResponse(
+            logger.info(f"[PROFILER] XLSX Parsing & Processing: {time.perf_counter() - t0:.4f}s")
+            response_payload = UploadResponse(
                 file_name=file.filename,
                 file_type="xlsx",
                 data_category="tabular",
                 tabular=tabular_data,
                 text=None,
-                processing_time=round(time.time() - start_time, 2)
+                processing_time=0.0
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
             
     elif filename.endswith(".csv"):
         try:
+            t0 = time.perf_counter()
             from parsers.csv_parser import parse_csv
             raw_data = parse_csv(file)
             tabular_data = process_tabular_data(raw_data)
-            return UploadResponse(
+            logger.info(f"[PROFILER] CSV Parsing & Processing: {time.perf_counter() - t0:.4f}s")
+            response_payload = UploadResponse(
                 file_name=file.filename,
                 file_type="csv",
                 data_category="tabular",
                 tabular=tabular_data,
                 text=None,
-                processing_time=round(time.time() - start_time, 2)
+                processing_time=0.0
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
@@ -101,16 +120,17 @@ def upload_file(file: UploadFile = File(...)):
     elif filename.endswith(".pdf"):
         try:
             import concurrent.futures
-            file_bytes = file.file.read()
-            file.file.seek(0)
             
+            t0 = time.perf_counter()
             parsed_data = parse_pdf(file)
+            logger.info(f"[PROFILER] PDF Text & Spatial Grid Parsing: {time.perf_counter() - t0:.4f}s")
 
             # Run Text Summary, Table Extraction, and Unstructured Document Extraction concurrently
             from processors.resource_manager import get_global_executor
             from engine.document_extractor import process_unstructured_document
             executor = get_global_executor()
             
+            t1 = time.perf_counter()
             future_text = executor.submit(
                 process_text,
                 raw_text=parsed_data["text"],
@@ -134,6 +154,8 @@ def upload_file(file: UploadFile = File(...)):
             except Exception as analytics_err:
                 logger.warning(f"Analytics extraction failed: {analytics_err}")
                 analytics_data = None
+            
+            logger.info(f"[PROFILER] Parallel PDF AI Extractor Calls: {time.perf_counter() - t1:.4f}s")
 
             # Deterministic TSV Table Fallback Backstop
             if not raw_table or not raw_table.get("rows"):
@@ -145,28 +167,31 @@ def upload_file(file: UploadFile = File(...)):
                 tabular_data = process_tabular_data(raw_table)
                 data_category = "mixed"
 
-            return UploadResponse(
+            response_payload = UploadResponse(
                 file_name=file.filename,
                 file_type="pdf",
                 data_category=data_category,
                 tabular=tabular_data,
                 text=text_data,
                 analytics=analytics_data,
-                processing_time=round(time.time() - start_time, 2)
+                processing_time=0.0
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
 
     elif filename.endswith((".docx", ".doc")):
         try:
+            t0 = time.perf_counter()
             parsed_data = parse_docx(file)
             raw_text = parsed_data.get("text", "")
             paragraph_count = parsed_data.get("paragraph_count")
+            logger.info(f"[PROFILER] Word Doc Native Parsing: {time.perf_counter() - t0:.4f}s")
 
             from processors.resource_manager import get_global_executor
             from engine.document_extractor import process_unstructured_document
             executor = get_global_executor()
             
+            t1 = time.perf_counter()
             future_text = executor.submit(
                 process_text,
                 raw_text=raw_text,
@@ -191,6 +216,8 @@ def upload_file(file: UploadFile = File(...)):
                 logger.warning(f"Analytics extraction failed for DOCX: {analytics_err}")
                 analytics_data = None
 
+            logger.info(f"[PROFILER] Parallel DOCX AI Extractor Calls: {time.perf_counter() - t1:.4f}s")
+
             # DOCX TSV Fallback Backstop (matching PDF pathway)
             if not raw_table or not raw_table.get("rows"):
                 raw_table = parse_tsv_grid(parsed_data.get("structured_tsv") or raw_text)
@@ -202,28 +229,31 @@ def upload_file(file: UploadFile = File(...)):
                 data_category = "mixed"
 
             file_ext = "docx" if filename.endswith(".docx") else "doc"
-            return UploadResponse(
+            response_payload = UploadResponse(
                 file_name=file.filename,
                 file_type=file_ext,
                 data_category=data_category,
                 tabular=tabular_data,
                 text=text_data,
                 analytics=analytics_data,
-                processing_time=round(time.time() - start_time, 2)
+                processing_time=0.0
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. It may be corrupted. Error: {str(e)}")
 
     elif filename.endswith(".txt"):
         try:
+            t0 = time.perf_counter()
             parsed_data = parse_txt(file)
             raw_text = parsed_data.get("text", "")
             paragraph_count = parsed_data.get("paragraph_count")
+            logger.info(f"[PROFILER] TXT File Parsing: {time.perf_counter() - t0:.4f}s")
 
             from processors.resource_manager import get_global_executor
             from engine.document_extractor import process_unstructured_document
             executor = get_global_executor()
             
+            t1 = time.perf_counter()
             future_text = executor.submit(
                 process_text,
                 raw_text=raw_text,
@@ -247,6 +277,8 @@ def upload_file(file: UploadFile = File(...)):
                 logger.warning(f"Analytics extraction failed for TXT: {analytics_err}")
                 analytics_data = None
 
+            logger.info(f"[PROFILER] Parallel TXT AI Extractor Calls: {time.perf_counter() - t1:.4f}s")
+
             tabular_data = None
             data_category = "text"
             if raw_table and raw_table.get("rows"):
@@ -254,17 +286,35 @@ def upload_file(file: UploadFile = File(...)):
                 data_category = "mixed"
 
             file_ext = filename.split(".")[-1].lower()
-            return UploadResponse(
+            response_payload = UploadResponse(
                 file_name=file.filename,
                 file_type=file_ext,
                 data_category=data_category,
                 tabular=tabular_data,
                 text=text_data,
                 analytics=analytics_data,
-                processing_time=round(time.time() - start_time, 2)
+                processing_time=0.0
             )
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not parse file. Error: {str(e)}")
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed formats: .xlsx, .csv, .pdf, .docx, .doc, .txt"
+        )
+
+    # Cache response payload and populate processing time dynamically on cache miss
+    if response_payload:
+        try:
+            cache_dict = response_payload.model_dump()
+            cache_dict.pop("processing_time", None)
+            save_cached_analytics(file_hash, file.filename, cache_dict)
+        except Exception as cache_err:
+            logger.warning(f"Failed to cache response in upload endpoint: {cache_err}")
+        
+        response_payload.processing_time = round(time.perf_counter() - start_time, 2)
+        return response_payload
 
     else:
         raise HTTPException(
