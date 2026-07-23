@@ -36,6 +36,15 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Add columns dynamically for page dimensions if they don't exist
+        try:
+            conn.execute("ALTER TABLE document_metrics ADD COLUMN page_width DOUBLE;")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE document_metrics ADD COLUMN page_height DOUBLE;")
+        except Exception:
+            pass
         logger.info(f"DuckDB initialized successfully at {DB_PATH}")
     except Exception as e:
         logger.error(f"DuckDB init_db error: {e}")
@@ -68,7 +77,9 @@ def save_document_analytics(file_name: str, analytics: DocumentAnalytics) -> int
                 m.unit or "",
                 m.context_snippet or "",
                 int(m.page_number or 1),
-                bbox_str
+                bbox_str,
+                m.page_width,
+                m.page_height
             ))
 
         # 2. Store Key-Value Pairs
@@ -82,6 +93,8 @@ def save_document_analytics(file_name: str, analytics: DocumentAnalytics) -> int
                 "",
                 f"{kv.key_name}: {kv.value} | {kv.context_snippet or ''}",
                 int(kv.page_number or 1),
+                None,
+                None,
                 None
             ))
 
@@ -96,6 +109,8 @@ def save_document_analytics(file_name: str, analytics: DocumentAnalytics) -> int
                 "",
                 analytics.summary,
                 1,
+                None,
+                None,
                 None
             ))
 
@@ -111,14 +126,16 @@ def save_document_analytics(file_name: str, analytics: DocumentAnalytics) -> int
                 "",
                 tbl_json,
                 int(tbl.page_number or 1),
+                None,
+                None,
                 None
             ))
 
         if rows_to_insert:
             conn.executemany("""
                 INSERT INTO document_metrics 
-                (id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                (id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json, page_width, page_height)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, rows_to_insert)
             inserted_count = len(rows_to_insert)
             logger.info(f"DuckDB saved {inserted_count} analytics entries for file '{file_name}'")
@@ -136,7 +153,7 @@ def get_metrics_by_file(file_name: str) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     try:
         res = conn.execute("""
-            SELECT id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json, created_at
+            SELECT id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json, page_width, page_height, created_at
             FROM document_metrics
             WHERE file_name = ?
             ORDER BY page_number ASC, created_at DESC;
@@ -155,7 +172,9 @@ def get_metrics_by_file(file_name: str) -> List[Dict[str, Any]]:
                 "context_snippet": r[6],
                 "page_number": r[7],
                 "bbox": bbox,
-                "created_at": str(r[9])
+                "page_width": r[9],
+                "page_height": r[10],
+                "created_at": str(r[11])
             })
         return results
     except Exception as e:

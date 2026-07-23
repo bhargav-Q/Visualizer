@@ -9,6 +9,8 @@ class ExtractedMetric(BaseModel):
     context_snippet: str = Field(default="", description="Exact phrase/sentence supporting this metric")
     page_number: Optional[int] = Field(default=1, description="Source page number where metric appears")
     bbox: Optional[List[float]] = Field(default=None, description="Spatial bounding box coordinates [x0, y0, x1, y1]")
+    page_width: Optional[float] = Field(default=None, description="Standard page width in points")
+    page_height: Optional[float] = Field(default=None, description="Standard page height in points")
 
     @field_validator("metric_value", mode="before")
     @classmethod

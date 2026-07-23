@@ -55,6 +55,8 @@ class ExtractedMetricResponse(BaseModel):
     context_snippet: str
     page_number: Optional[int] = 1
     bbox: Optional[List[float]] = None
+    page_width: Optional[float] = None
+    page_height: Optional[float] = None
 
 class KeyValuePairResponse(BaseModel):
     key_name: str
