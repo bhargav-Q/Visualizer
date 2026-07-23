@@ -56,29 +56,38 @@ def upload_file(file: UploadFile = File(...)):
     if file_size > 16 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 16MB.")
         
-    # Save the file to disk to support PDF visualization serving
     try:
         file_bytes = file.file.read()
         file.file.seek(0)
-        file_path = DOCUMENTS_DIR / os.path.basename(file.filename)
+    except Exception:
+        file_bytes = b""
+
+    # SHA-256 hash & deduplicated storage filename
+    import hashlib
+    from engine.db import get_cached_analytics, save_cached_analytics
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    
+    sanitized_name = os.path.basename(file.filename)
+    unique_name = f"{file_hash[:10]}_{sanitized_name}"
+    
+    try:
+        file_path = DOCUMENTS_DIR / unique_name
         with open(file_path, "wb") as f:
             f.write(file_bytes)
         file.file.seek(0)
     except Exception as save_err:
         logger.warning(f"Could not save file '{file.filename}' to disk: {save_err}")
-        file_bytes = b""
 
-    # SHA-256 caching logic
-    import hashlib
-    from engine.db import get_cached_analytics, save_cached_analytics
-    file_hash = hashlib.sha256(file_bytes).hexdigest()
-    
-    cached_payload = get_cached_analytics(file_hash)
-    if cached_payload:
-        logger.info(f"[PROFILER] Cache HIT for file '{file.filename}' (hash: {file_hash})")
-        cached_payload["file_name"] = file.filename
-        cached_payload["processing_time"] = round(time.perf_counter() - start_time, 4)
-        return UploadResponse(**cached_payload)
+    # SHA-256 caching logic with stale schema recovery
+    try:
+        cached_payload = get_cached_analytics(file_hash)
+        if cached_payload:
+            logger.info(f"[PROFILER] Cache HIT for file '{file.filename}' (hash: {file_hash})")
+            cached_payload["file_name"] = file.filename
+            cached_payload["processing_time"] = round(time.perf_counter() - start_time, 4)
+            return UploadResponse(**cached_payload)
+    except Exception as cache_err:
+        logger.warning(f"[WARNING] Stale cache schema detected. Re-parsing document... Details: {cache_err}")
 
     response_payload = None
     
@@ -342,7 +351,11 @@ def get_document_pdf_api(file_name: str):
     safe_name = os.path.basename(file_name)
     file_path = DOCUMENTS_DIR / safe_name
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Source PDF file not found on disk")
+        matching_files = list(DOCUMENTS_DIR.glob(f"*_{safe_name}"))
+        if matching_files:
+            file_path = matching_files[-1]
+        else:
+            raise HTTPException(status_code=404, detail="Source PDF file not found on disk")
     return FileResponse(file_path, media_type="application/pdf", filename=safe_name)
 
 if __name__ == "__main__":

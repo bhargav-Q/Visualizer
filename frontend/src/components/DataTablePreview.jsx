@@ -1,19 +1,52 @@
-import React, { useState } from 'react';
-import { Table, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Table, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import './DataTablePreview.css';
 
 const ROWS_PER_PAGE = 10;
 
 const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortColIndex, setSortColIndex] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
 
   if (!columns || !previewRows || previewRows.length === 0) {
     return <div className="no-data">No preview rows available.</div>;
   }
 
-  const totalPages = Math.ceil(previewRows.length / ROWS_PER_PAGE);
+  const handleHeaderClick = (colIdx) => {
+    if (sortColIndex === colIdx) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColIndex(colIdx);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedRows = useMemo(() => {
+    if (sortColIndex === null) return previewRows;
+    return [...previewRows].sort((a, b) => {
+      let valA = Array.isArray(a) ? a[sortColIndex] : a;
+      let valB = Array.isArray(b) ? b[sortColIndex] : b;
+
+      if (valA === null || valA === undefined) valA = '';
+      if (valB === null || valB === undefined) valB = '';
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+
+      valA = String(valA).toLowerCase();
+      valB = String(valB).toLowerCase();
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [previewRows, sortColIndex, sortDirection]);
+
+  const totalPages = Math.ceil(sortedRows.length / ROWS_PER_PAGE);
   const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
-  const paginatedRows = previewRows.slice(startIndex, startIndex + ROWS_PER_PAGE);
+  const paginatedRows = sortedRows.slice(startIndex, startIndex + ROWS_PER_PAGE);
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
@@ -37,7 +70,18 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
           <thead>
             <tr>
               {columns.map((col, idx) => (
-                <th key={idx}>{col.name}</th>
+                <th 
+                  key={idx} 
+                  onClick={() => handleHeaderClick(idx)}
+                  className="sortable-header"
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Click to sort by column"
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    {col.name}
+                    <ArrowUpDown size={12} style={{ opacity: sortColIndex === idx ? 1 : 0.4 }} />
+                  </div>
+                </th>
               ))}
             </tr>
           </thead>

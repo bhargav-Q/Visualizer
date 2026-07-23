@@ -2,12 +2,16 @@ import os
 import json
 import uuid
 import logging
+import threading
 import duckdb
 from pathlib import Path
 from typing import List, Dict, Any
 from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable
 
 logger = logging.getLogger(__name__)
+
+# Global reentrant thread lock for DuckDB write operations
+db_write_lock = threading.Lock()
 
 # Ensure data directory exists
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -64,96 +68,97 @@ def save_document_analytics(file_name: str, analytics: DocumentAnalytics) -> int
     Persists all extracted metrics, key-value pairs, and table records into DuckDB.
     Returns the total number of records inserted.
     """
-    init_db()
-    conn = get_db_connection()
-    inserted_count = 0
-    try:
-        # Delete existing entries for this file to support clean re-ingestion
-        conn.execute("DELETE FROM document_metrics WHERE file_name = ?", [file_name])
+    with db_write_lock:
+        init_db()
+        conn = get_db_connection()
+        inserted_count = 0
+        try:
+            # Delete existing entries for this file to support clean re-ingestion
+            conn.execute("DELETE FROM document_metrics WHERE file_name = ?", [file_name])
 
-        rows_to_insert = []
+            rows_to_insert = []
 
-        # 1. Store Extracted Metrics
-        for m in analytics.metrics:
-            bbox_str = json.dumps(m.bbox) if m.bbox else None
-            rows_to_insert.append((
-                str(uuid.uuid4()),
-                file_name,
-                "metric",
-                m.category or "General Metric",
-                float(m.metric_value),
-                m.unit or "",
-                m.context_snippet or "",
-                int(m.page_number or 1),
-                bbox_str,
-                m.page_width,
-                m.page_height
-            ))
+            # 1. Store Extracted Metrics
+            for m in analytics.metrics:
+                bbox_str = json.dumps(m.bbox) if m.bbox else None
+                rows_to_insert.append((
+                    str(uuid.uuid4()),
+                    file_name,
+                    "metric",
+                    m.category or "General Metric",
+                    float(m.metric_value),
+                    m.unit or "",
+                    m.context_snippet or "",
+                    int(m.page_number or 1),
+                    bbox_str,
+                    m.page_width,
+                    m.page_height
+                ))
 
-        # 2. Store Key-Value Pairs
-        for kv in analytics.key_value_pairs:
-            rows_to_insert.append((
-                str(uuid.uuid4()),
-                file_name,
-                "kv_pair",
-                kv.key_name or "Attribute",
-                None,
-                "",
-                f"{kv.key_name}: {kv.value} | {kv.context_snippet or ''}",
-                int(kv.page_number or 1),
-                None,
-                None,
-                None
-            ))
+            # 2. Store Key-Value Pairs
+            for kv in analytics.key_value_pairs:
+                rows_to_insert.append((
+                    str(uuid.uuid4()),
+                    file_name,
+                    "kv_pair",
+                    kv.key_name or "Attribute",
+                    None,
+                    "",
+                    f"{kv.key_name}: {kv.value} | {kv.context_snippet or ''}",
+                    int(kv.page_number or 1),
+                    None,
+                    None,
+                    None
+                ))
 
-        # 3. Store Summary record
-        if analytics.summary:
-            rows_to_insert.append((
-                str(uuid.uuid4()),
-                file_name,
-                "summary",
-                "Executive Summary",
-                None,
-                "",
-                analytics.summary,
-                1,
-                None,
-                None,
-                None
-            ))
+            # 3. Store Summary record
+            if analytics.summary:
+                rows_to_insert.append((
+                    str(uuid.uuid4()),
+                    file_name,
+                    "summary",
+                    "Executive Summary",
+                    None,
+                    "",
+                    analytics.summary,
+                    1,
+                    None,
+                    None,
+                    None
+                ))
 
-        # 4. Store Tables
-        for tbl in analytics.tables:
-            tbl_json = json.dumps({"headers": tbl.headers, "rows": tbl.rows})
-            rows_to_insert.append((
-                str(uuid.uuid4()),
-                file_name,
-                "table",
-                tbl.table_title or "Table Grid",
-                None,
-                "",
-                tbl_json,
-                int(tbl.page_number or 1),
-                None,
-                None,
-                None
-            ))
+            # 4. Store Tables
+            for tbl in analytics.tables:
+                tbl_json = json.dumps({"headers": tbl.headers, "rows": tbl.rows})
+                rows_to_insert.append((
+                    str(uuid.uuid4()),
+                    file_name,
+                    "table",
+                    tbl.table_title or "Table Grid",
+                    None,
+                    "",
+                    tbl_json,
+                    int(tbl.page_number or 1),
+                    None,
+                    None,
+                    None
+                ))
 
-        if rows_to_insert:
-            conn.executemany("""
-                INSERT INTO document_metrics 
-                (id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json, page_width, page_height)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-            """, rows_to_insert)
-            inserted_count = len(rows_to_insert)
-            logger.info(f"DuckDB saved {inserted_count} analytics entries for file '{file_name}'")
+            if rows_to_insert:
+                conn.executemany("""
+                    INSERT INTO document_metrics 
+                    (id, file_name, data_type, category, metric_value, unit, context_snippet, page_number, bbox_json, page_width, page_height)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, rows_to_insert)
+                inserted_count = len(rows_to_insert)
+                logger.info(f"DuckDB saved {inserted_count} analytics entries for file '{file_name}'")
 
-    except Exception as e:
-        logger.error(f"Error saving analytics to DuckDB for '{file_name}': {e}")
-    finally:
-        conn.close()
+        except Exception as e:
+            logger.error(f"Error saving analytics to DuckDB for '{file_name}': {e}")
+        finally:
+            conn.close()
 
-    return inserted_count
+        return inserted_count
 
 def get_metrics_by_file(file_name: str) -> List[Dict[str, Any]]:
     """Retrieves all metric entries for a specified file from DuckDB."""
@@ -237,16 +242,17 @@ def get_cached_analytics(file_hash: str) -> dict | None:
 
 def save_cached_analytics(file_hash: str, file_name: str, analytics_dict: dict):
     """Caches parsed analytics JSON in DuckDB by file hash."""
-    init_db()
-    conn = get_db_connection()
-    try:
-        analytics_json = json.dumps(analytics_dict)
-        conn.execute("""
-            INSERT OR REPLACE INTO document_cache (file_hash, file_name, analytics_json, created_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP);
-        """, [file_hash, file_name, analytics_json])
-        logger.info(f"Successfully cached analytics for hash '{file_hash}' ({file_name})")
-    except Exception as e:
-        logger.error(f"Error caching analytics in DuckDB for hash '{file_hash}': {e}")
-    finally:
-        conn.close()
+    with db_write_lock:
+        init_db()
+        conn = get_db_connection()
+        try:
+            analytics_json = json.dumps(analytics_dict)
+            conn.execute("""
+                INSERT OR REPLACE INTO document_cache (file_hash, file_name, analytics_json, created_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP);
+            """, [file_hash, file_name, analytics_json])
+            logger.info(f"Successfully cached analytics for hash '{file_hash}' ({file_name})")
+        except Exception as e:
+            logger.error(f"Error caching analytics in DuckDB for hash '{file_hash}': {e}")
+        finally:
+            conn.close()

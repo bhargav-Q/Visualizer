@@ -40,20 +40,18 @@ const Dashboard = ({ data, onReset }) => {
   // Metrics filtering
   const filteredMetrics = (data.analytics?.metrics || []).filter(m => {
     const term = searchTerm.toLowerCase();
-    return (
-      m.category.toLowerCase().includes(term) ||
-      m.metric_value.toString().includes(term) ||
-      (m.unit || '').toLowerCase().includes(term)
-    );
+    const category = (m.category || '').toLowerCase();
+    const val = (m.metric_value !== undefined && m.metric_value !== null) ? m.metric_value.toString() : '';
+    const unit = (m.unit || '').toLowerCase();
+    return category.includes(term) || val.includes(term) || unit.includes(term);
   });
 
   // Key Value pairs filtering
   const filteredKeyValuePairs = (data.analytics?.key_value_pairs || []).filter(kv => {
     const term = searchTerm.toLowerCase();
-    return (
-      kv.key_name.toLowerCase().includes(term) ||
-      kv.value.toLowerCase().includes(term)
-    );
+    const key = (kv.key_name || '').toLowerCase();
+    const val = (kv.value || '').toLowerCase();
+    return key.includes(term) || val.includes(term);
   });
 
   // Key Value sorting
