@@ -21,11 +21,11 @@ const TabularView = ({ tabularData, activeSubTab }) => {
         <>
           <StatsCards metrics={metrics} />
           <ChartPanel charts={charts} />
-          {/* <DataDetailsAccordion 
+          <DataDetailsAccordion 
             columns={columns} 
             numericSummary={numeric_summary} 
             categoricalSummary={categorical_summary} 
-          /> */}
+          />
         </>
       ) : (
         <DataTablePreview 
