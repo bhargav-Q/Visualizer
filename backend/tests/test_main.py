@@ -131,3 +131,44 @@ def test_upload_valid_txt_endpoint(client, mocker):
     assert data["data_category"] == "text"
     assert data["text"]["summary"] == "Text summary"
 
+def test_get_document_metrics_not_found(client, mocker):
+    """Test retrieving metrics for a file that does not exist in the database."""
+    mocker.patch("engine.db.get_metrics_by_file", return_value=[])
+    response = client.get("/api/documents/non_existent.pdf/metrics")
+    assert response.status_code == 404
+    assert "No metrics found" in response.json()["detail"]
+
+def test_get_document_metrics_success(client, mocker):
+    """Test retrieving metrics successfully from the DuckDB database."""
+    mock_metrics = [
+        {
+            "id": "1",
+            "file_name": "test.pdf",
+            "data_type": "metric",
+            "category": "Revenue",
+            "metric_value": 1000.0,
+            "unit": "USD",
+            "context_snippet": "Revenue was 1000 USD",
+            "page_number": 1,
+            "bbox": [10.0, 20.0, 30.0, 40.0],
+            "page_width": 612.0,
+            "page_height": 792.0,
+            "created_at": "2026-07-23 12:00:00"
+        }
+    ]
+    mocker.patch("engine.db.get_metrics_by_file", return_value=mock_metrics)
+    response = client.get("/api/documents/test.pdf/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["category"] == "Revenue"
+    assert data[0]["page_width"] == 612.0
+
+def test_get_document_pdf_not_found(client, mocker):
+    """Test retrieving PDF that does not exist on disk."""
+    from pathlib import Path
+    mocker.patch("main.DOCUMENTS_DIR", new=Path("/dummy_path"))
+    response = client.get("/api/documents/non_existent.pdf/pdf")
+    assert response.status_code == 404
+    assert "Source PDF file not found" in response.json()["detail"]
+
