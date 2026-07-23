@@ -1,9 +1,12 @@
 import os
 import json
+import logging
 from dotenv import load_dotenv
 from pathlib import Path
 from openai import OpenAI
 from models.schemas import TextResult, KeywordItem
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables (.env in project root or current dir)
 env_path = Path(__file__).resolve().parent.parent.parent / ".env"
