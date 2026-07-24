@@ -146,3 +146,17 @@ def test_process_unstructured_document_txt_file():
     assert result["duckdb_persisted"] is True
     assert result["records_inserted"] > 0
     assert "metrics" in result["analytics"]
+
+@pytest.mark.anyio
+async def test_process_unstructured_document_async():
+    """Tests non-blocking parallel async processing entrypoint."""
+    from engine.document_extractor import process_unstructured_document_async
+    file_bytes = b"Quarterly Earnings: $1,250,000 USD\nMargin: 35%"
+    upload_file = UploadFile(filename="q3_earnings.txt", file=BytesIO(file_bytes))
+
+    result = await process_unstructured_document_async(upload_file)
+
+    assert result["file_name"] == "q3_earnings.txt"
+    assert result["duckdb_persisted"] is True
+    assert "analytics" in result
+

@@ -14,6 +14,10 @@ def test_text_processor_success(mocker):
         MagicMock(message=MagicMock(content='{"summary": "Test summary.", "keywords": [{"word": "test", "score": 0.99}]}'))
     ]
     
+    mocker.patch("engine.vision_client.is_vision_api_disabled", return_value=False)
+    mocker.patch("processors.text_processor.is_vision_api_disabled", return_value=False)
+    mocker.patch("processors.text_processor.api_key", "test-key")
+    
     # Mock the OpenAI client creation
     mock_openai = mocker.patch("processors.text_processor.OpenAI")
     mock_client_instance = mock_openai.return_value
