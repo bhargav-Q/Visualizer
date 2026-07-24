@@ -2,6 +2,8 @@ import React from 'react';
 import { Activity, Loader2, AlertCircle, Sun, Moon, BarChart2, FileText, Image, Layers } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from './api/config';
+import { ENDPOINTS } from './api/endpoints';
+import { DOCUMENTATION_URL } from './utils/constants';
 import FileUpload from './components/FileUpload';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -33,7 +35,7 @@ function App() {
     formData.append("file", file);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/upload`, formData, {
+      const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.UPLOAD}`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       console.log("Success:", response.data);
@@ -61,7 +63,7 @@ function App() {
           <nav className="nav-links">
             <a href="#" className="nav-link" onClick={(e) => { e.preventDefault(); setData(null); setError(null); }}>Upload</a>
             {/* <a href="#" className="nav-link" onClick={(e) => { e.preventDefault(); alert("Feature coming soon: Visualizer history logs."); }}>History</a> */}
-            <a href="https://github.com/bhargav-Q/Visualizer" target="_blank" rel="noopener noreferrer" className="nav-link">Documentation</a>
+            <a href={DOCUMENTATION_URL} target="_blank" rel="noopener noreferrer" className="nav-link">Documentation</a>
           </nav>
 
           {/* <span className="badge">NVIDIA DeepSeek Powered</span> */}
