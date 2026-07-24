@@ -21,20 +21,25 @@ logger = logging.getLogger(__name__)
 
 from pathlib import Path
 import os
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+BACKEND_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BACKEND_DIR.parent
+DATA_DIR = ROOT_DIR / "data"
 DOCUMENTS_DIR = DATA_DIR / "documents"
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Load environment variables (NVIDIA_API_KEY)
+# Load environment variables (.env in backend or root project dir)
+load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+load_dotenv(dotenv_path=ROOT_DIR / ".env")
 load_dotenv()
 
 app = FastAPI(title="Visualizer API")
 
-# Allow React frontend to communicate with backend
+# Allow React frontend to communicate with backend dynamically from ALLOWED_ORIGINS env var
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

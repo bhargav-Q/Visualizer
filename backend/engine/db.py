@@ -20,7 +20,7 @@ _READ_CONN_LOCK = threading.Lock()
 # Ensure data directory exists
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = str(DATA_DIR / "app_data.duckdb")
+DB_PATH = os.getenv("DUCKDB_PATH", str(DATA_DIR / "app_data.duckdb"))
 
 def get_db_connection():
     """Returns a fresh connection to the embedded DuckDB database for write operations."""
