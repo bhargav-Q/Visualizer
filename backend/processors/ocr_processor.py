@@ -105,7 +105,7 @@ Document Text:
 {raw_text[:60000]}"""
 
 
-        model_name = os.getenv("TABLE_AI_MODEL", "deepseek-ai/deepseek-v4-flash")
+        model_name = os.getenv("TABLE_AI_MODEL", "meta/llama-3.1-70b-instruct")
         logger.info(f"Sending document text to AI model {model_name} for table extraction...")
 
         

@@ -13,3 +13,4 @@ data/*
 data/documents/*
 !data/documents/.gitkeep
 test_files/
+LATEST_EXTRACTED_ANALYSIS.json

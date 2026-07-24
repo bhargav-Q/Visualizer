@@ -1,18 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, File, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { MAX_FILE_SIZE, ALLOWED_TYPES, ALLOWED_EXTENSIONS } from '../utils/constants';
 import './FileUpload.css';
-
-const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
-const ALLOWED_TYPES = {
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-  'application/pdf': '.pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-  'application/msword': '.doc',
-  'text/csv': '.csv',
-  'application/vnd.ms-excel': '.csv',
-  'text/plain': '.txt'
-};
-const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.pdf', '.docx', '.doc', '.txt'];
 
 const FileUpload = ({ onFileSelect }) => {
   const [isDragging, setIsDragging] = useState(false);
