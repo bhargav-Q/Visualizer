@@ -1,9 +1,15 @@
 .env
+.env.local
+*.env
+*.duckdb
 backend/venv/
+.venv/
 __pycache__/
 design.md
 PROJECT_ARCHITECTURE.md
 PROJECT_CONTEXT.md
-data/
+data/*
+!data/documents/
+data/documents/*
+!data/documents/.gitkeep
 test_files/
-
