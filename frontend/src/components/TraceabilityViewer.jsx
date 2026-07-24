@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { Eye, Search, AlertCircle, FileText, Compass } from 'lucide-react';
+import { API_BASE_URL } from '../api/config';
 import './TraceabilityViewer.css';
 
 const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
@@ -21,7 +22,7 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
     const fetchMetrics = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`http://localhost:8000/api/documents/${encodeURIComponent(fileName)}/metrics`);
+        const res = await axios.get(`${API_BASE_URL}/api/documents/${encodeURIComponent(fileName)}/metrics`);
         // Filter down to only metric type records for coordinate tracing
         const metricRecords = res.data.filter(r => r.data_type === 'metric');
         setMetrics(metricRecords);
@@ -77,7 +78,7 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
 
     const loadPdf = async () => {
       try {
-        const url = `http://localhost:8000/api/documents/${encodeURIComponent(fileName)}/pdf`;
+        const url = `${API_BASE_URL}/api/documents/${encodeURIComponent(fileName)}/pdf`;
         const loadingTask = window.pdfjsLib.getDocument({
           url,
           withCredentials: true
