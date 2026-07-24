@@ -15,3 +15,4 @@ data/documents/*
 test_files/
 LATEST_EXTRACTED_ANALYSIS.json
 notebook_lm_sources/
+HARDCODED_VALUES_AUDIT.md
