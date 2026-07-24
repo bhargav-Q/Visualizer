@@ -115,7 +115,7 @@ Document Text:
             "temperature": 0.2,
             "max_tokens": 4096,
             "response_format": {"type": "json_object"},
-            "timeout": 45.0
+            "timeout": 15.0
         }
         if "deepseek" in model_name.lower():
             kwargs["extra_body"] = {"chat_template_kwargs": {"thinking": False}}
@@ -212,7 +212,7 @@ def extract_tables_with_nemotron_ocr(image_bytes: bytes) -> dict | None:
     }
 
     try:
-        response = requests.post(invoke_url, headers=headers, json=payload, timeout=30.0)
+        response = requests.post(invoke_url, headers=headers, json=payload, timeout=15.0)
         if response.status_code == 200:
             res = response.json()
             logger.info("Successfully received Nemotron OCR v2 API response")
@@ -223,6 +223,25 @@ def extract_tables_with_nemotron_ocr(image_bytes: bytes) -> dict | None:
         logger.warning(f"Nemotron OCR v2 API error: {e}")
 
     return None
+
+async def extract_tables_from_text_async(raw_text: str) -> dict | None:
+    """Async wrapper for extract_tables_from_text enforcing 15-second non-blocking execution."""
+    import asyncio
+    try:
+        return await asyncio.to_thread(extract_tables_from_text, raw_text)
+    except Exception as exc:
+        logger.warning(f"Async table extraction call failed: {exc}")
+        return None
+
+async def extract_tables_with_nemotron_ocr_async(image_bytes: bytes) -> dict | None:
+    """Async wrapper for extract_tables_with_nemotron_ocr enforcing 15-second non-blocking execution."""
+    import asyncio
+    try:
+        return await asyncio.to_thread(extract_tables_with_nemotron_ocr, image_bytes)
+    except Exception as exc:
+        logger.warning(f"Async Nemotron OCR call failed: {exc}")
+        return None
+
 
 
 def extract_page_with_nemotron_sectioned(page, dpi=150, max_b64_chars=170000):

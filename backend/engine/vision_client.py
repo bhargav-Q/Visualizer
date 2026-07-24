@@ -3,9 +3,10 @@ import json
 import base64
 import time
 import logging
-from typing import Optional
+import httpx
 from dotenv import load_dotenv
-from openai import OpenAI
+from typing import Optional
+from openai import OpenAI, AsyncOpenAI
 from engine.pydantic_models import DocumentAnalytics
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,9 @@ api_key = os.getenv("NVIDIA_API_KEY")
 
 VISION_MODEL_NAME = "meta/llama-3.2-11b-vision-instruct"
 
+# Shared HTTPX 15-second resilient timeout configuration
+TIMEOUT_CONFIG = httpx.Timeout(15.0, connect=5.0)
+
 def get_openai_client() -> Optional[OpenAI]:
     """Returns an OpenAI client initialized with NVIDIA NIM base URL."""
     if not api_key:
@@ -22,7 +26,21 @@ def get_openai_client() -> Optional[OpenAI]:
         return None
     return OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=api_key
+        api_key=api_key,
+        http_client=httpx.Client(timeout=TIMEOUT_CONFIG),
+        max_retries=1
+    )
+
+def get_async_openai_client() -> Optional[AsyncOpenAI]:
+    """Returns an AsyncOpenAI client initialized with NVIDIA NIM base URL and 15s timeout."""
+    if not api_key:
+        logger.warning("NVIDIA_API_KEY is missing from environment")
+        return None
+    return AsyncOpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key,
+        http_client=httpx.AsyncClient(timeout=TIMEOUT_CONFIG),
+        max_retries=1
     )
 
 def encode_image_to_base64(image_bytes: bytes) -> str:
@@ -209,3 +227,16 @@ CRITICAL EXTRACTION RULES:
                 time.sleep(2 ** attempt) # Exponential backoff for other transient errors
 
     return None
+
+async def extract_analytics_with_vision_async(image_bytes: bytes, text_hint: str = "") -> Optional[DocumentAnalytics]:
+    """
+    Async non-blocking version of extract_analytics_with_vision.
+    Enforces a strict 15-second timeout limit.
+    """
+    import asyncio
+    try:
+        return await asyncio.to_thread(extract_analytics_with_vision, image_bytes, text_hint, max_retries=1)
+    except Exception as exc:
+        logger.warning(f"Async Vision LLM call failed or timed out: {exc}")
+        return None
+

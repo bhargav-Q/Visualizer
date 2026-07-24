@@ -3,10 +3,15 @@ import json
 import logging
 from dotenv import load_dotenv
 from pathlib import Path
-from openai import OpenAI
+import httpx
+from openai import OpenAI, AsyncOpenAI
 from models.schemas import TextResult, KeywordItem
+from engine.vision_client import is_vision_api_disabled, disable_vision_api
 
 logger = logging.getLogger(__name__)
+
+# Shared HTTPX 15-second resilient timeout configuration
+TIMEOUT_CONFIG = httpx.Timeout(15.0, connect=5.0)
 
 # Load environment variables (.env in project root or current dir)
 env_path = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -18,7 +23,6 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
     word_count = len(raw_text.split())
     
     model_name = os.getenv("TEXT_AI_MODEL", "deepseek-ai/deepseek-v4-flash")
-
 
     fallback_summary = "Summary unavailable — AI service is temporarily down."
     fallback_keywords = []
@@ -37,7 +41,9 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
 
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=api_key
+        api_key=api_key,
+        http_client=httpx.Client(timeout=TIMEOUT_CONFIG),
+        max_retries=1
     )
 
     prompt = f"""
@@ -67,7 +73,7 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
             extra_body={"chat_template_kwargs": {"thinking": False}},
             stream=False,
             response_format={"type": "json_object"},
-            timeout=30.0
+            timeout=15.0
         )
         
         # Optional: Print reasoning if it exists (for debugging)
@@ -124,3 +130,21 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
             paragraph_count=paragraph_count,
             ai_model=model_name
         )
+
+async def process_text_async(raw_text: str, page_count: int = None, paragraph_count: int = None) -> TextResult:
+    """Async wrapper for process_text enforcing 15-second non-blocking execution."""
+    import asyncio
+    try:
+        return await asyncio.to_thread(process_text, raw_text, page_count, paragraph_count)
+    except Exception as exc:
+        logger.warning(f"Async process_text call failed: {exc}")
+        word_count = len(raw_text.split()) if raw_text else 0
+        return TextResult(
+            summary="Summary unavailable — execution timed out.",
+            keywords=[],
+            word_count=word_count,
+            page_count=page_count,
+            paragraph_count=paragraph_count,
+            ai_model=os.getenv("TEXT_AI_MODEL", "deepseek-ai/deepseek-v4-flash")
+        )
+

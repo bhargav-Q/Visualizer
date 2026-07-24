@@ -46,7 +46,7 @@ app.add_middleware(
 )
 
 @app.post("/api/upload", response_model=UploadResponse)
-def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...)):
     start_time = time.perf_counter()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -139,37 +139,32 @@ def upload_file(file: UploadFile = File(...)):
             parsed_data = parse_pdf(file)
             logger.info(f"[PROFILER] PDF Text & Spatial Grid Parsing: {time.perf_counter() - t0:.4f}s")
 
-            # Run Text Summary, Table Extraction, and Unstructured Document Extraction concurrently
-            from processors.resource_manager import get_global_executor
-            from engine.document_extractor import process_unstructured_document
-            executor = get_global_executor()
+            # Run Text Summary, Table Extraction, and Unstructured Document Extraction truly concurrently via asyncio.gather
+            from engine.document_extractor import process_unstructured_document_async
+            from processors.text_processor import process_text_async
+            from processors.ocr_processor import extract_tables_from_text_async
+            from models.schemas import TextResult
+            import asyncio
             
             t1 = time.perf_counter()
-            future_text = executor.submit(
-                process_text,
+            table_input_text = parsed_data.get("structured_tsv") or parsed_data["text"]
+
+            task_text = process_text_async(
                 raw_text=parsed_data["text"],
                 page_count=parsed_data["page_count"],
                 paragraph_count=None
             )
-            table_input_text = parsed_data.get("structured_tsv") or parsed_data["text"]
-            future_table = executor.submit(extract_tables_from_text, table_input_text)
-            future_analytics = executor.submit(process_unstructured_document, file)
+            task_table = extract_tables_from_text_async(table_input_text)
+            task_analytics = process_unstructured_document_async(file)
 
-            text_data = future_text.result()
-            try:
-                raw_table = future_table.result()
-            except Exception as table_err:
-                logger.warning(f"DeepSeek table extraction failed, falling back to TSV backstop: {table_err}")
-                raw_table = None
+            results = await asyncio.gather(task_text, task_table, task_analytics, return_exceptions=True)
 
-            try:
-                analytics_result = future_analytics.result()
-                analytics_data = analytics_result.get("analytics")
-            except Exception as analytics_err:
-                logger.warning(f"Analytics extraction failed: {analytics_err}")
-                analytics_data = None
+            text_data = results[0] if isinstance(results[0], TextResult) else None
+            raw_table = results[1] if isinstance(results[1], dict) else None
+            analytics_result = results[2] if isinstance(results[2], dict) else {}
+            analytics_data = analytics_result.get("analytics") if isinstance(analytics_result, dict) else None
             
-            logger.info(f"[PROFILER] Parallel PDF AI Extractor Calls: {time.perf_counter() - t1:.4f}s")
+            logger.info(f"[PERF] Parallel PDF AI Extractor Calls: {time.perf_counter() - t1:.4f}s")
 
             # Deterministic TSV Table Fallback Backstop
             if not raw_table or not raw_table.get("rows"):

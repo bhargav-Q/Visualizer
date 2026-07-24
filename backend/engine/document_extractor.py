@@ -399,3 +399,152 @@ def process_unstructured_document(file: UploadFile) -> Dict[str, Any]:
             "duckdb_persisted": True,
             "records_inserted": 0
         }
+
+async def process_unstructured_document_async(file: UploadFile) -> Dict[str, Any]:
+    """
+    Async entrypoint for non-blocking parallel document extraction with 15s timeouts,
+    smart routing, fault-tolerant fallbacks, and stopwatch telemetry.
+    """
+    import asyncio
+    import time
+    t_pipeline_start = time.perf_counter()
+
+    file.file.seek(0)
+    contents = file.file.read()
+    file.file.seek(0)
+
+    filename = file.filename or "document.pdf"
+    lower_name = filename.lower()
+
+    # 1. Smart Routing: Spreadsheets (.xlsx, .csv) -> Local PyArrow / Pandas (bypass external AI)
+    if lower_name.endswith((".xlsx", ".csv")):
+        t_tabular_start = time.perf_counter()
+        from parsers.xlsx_parser import parse_xlsx
+        from processors.tabular_processor import process_tabular_data
+        
+        if lower_name.endswith(".xlsx"):
+            raw_data = parse_xlsx(file)
+        else:
+            import pandas as pd
+            df = pd.read_csv(io.BytesIO(contents))
+            raw_data = {"sheet_name": filename, "data": df.to_dict(orient="records")}
+            
+        tabular_res = process_tabular_data(raw_data)
+        logger.info(f"[PERF] Spreadsheet Deterministic Processing: {time.perf_counter() - t_tabular_start:.4f}s")
+        
+        analytics = create_heuristic_fallback_analytics(filename, f"Spreadsheet document processed natively with {len(raw_data.get('data', []))} rows.")
+        
+        t_db_start = time.perf_counter()
+        inserted_records = save_document_analytics(filename, analytics)
+        logger.info(f"[PERF] DuckDB Write: {time.perf_counter() - t_db_start:.4f}s")
+        logger.info(f"[PERF] Total Pipeline Latency: {time.perf_counter() - t_pipeline_start:.4f}s")
+        
+        return {
+            "file_name": filename,
+            "analytics": analytics.model_dump(),
+            "duckdb_persisted": True,
+            "records_inserted": inserted_records
+        }
+
+    # 2. PDF & Text Document Processing
+    t_text_start = time.perf_counter()
+    raw_text = ""
+    page_pngs = []
+    page_text_blocks_by_page = {}
+
+    if lower_name.endswith(".pdf"):
+        import pymupdf
+        doc = pymupdf.open(stream=contents, filetype="pdf")
+        full_text_pages = []
+        for i, page in enumerate(doc):
+            page_num = i + 1
+            page_text = page.get_text().strip()
+            
+            # Native Digital PDF Check: if Page 1 has high text density (>150 chars), bypass Nemotron OCR
+            if len(page_text) < 150 or len(doc) <= 2:
+                pix = page.get_pixmap(dpi=150)
+                png_bytes = pix.tobytes("png")
+                page_pngs.append((page_num, png_bytes, page_text))
+
+            blocks = []
+            text_instances = page.get_text("blocks")
+            for b in text_instances:
+                if len(b) >= 5 and b[4].strip():
+                    blocks.append({
+                        "bbox": [b[0], b[1], b[2], b[3]],
+                        "text": b[4].strip()
+                    })
+
+            page_text_blocks_by_page[page_num] = {
+                "blocks": blocks,
+                "width": float(page.rect.width),
+                "height": float(page.rect.height)
+            }
+            if page_text:
+                full_text_pages.append(f"--- Page {page_num} ---\n" + page_text)
+        doc.close()
+        raw_text = "\n\n".join(full_text_pages)
+    else:
+        raw_text = contents.decode("utf-8", errors="ignore")
+
+    logger.info(f"[PERF] Text & Spatial Block Extraction: {time.perf_counter() - t_text_start:.4f}s")
+
+    # 3. Non-Blocking Parallel AI Tasks
+    t_parallel_start = time.perf_counter()
+    from engine.vision_client import extract_analytics_with_vision_async
+    from processors.text_processor import process_text_async
+    from processors.ocr_processor import extract_tables_from_text_async
+    from models.schemas import TextResult
+
+    task_vision = extract_analytics_with_vision_async(page_pngs[0][1], text_hint=raw_text[:2000]) if page_pngs else asyncio.sleep(0)
+    task_summary = process_text_async(raw_text)
+    task_tables = extract_tables_from_text_async(raw_text)
+
+    results = await asyncio.gather(task_vision, task_summary, task_tables, return_exceptions=True)
+
+    vision_res, summary_res, tables_res = results[0], results[1], results[2]
+    
+    logger.info(f"[PERF] Parallel AI Execution (Vision + Text Summary + Table Structuring): {time.perf_counter() - t_parallel_start:.4f}s")
+
+    # 4. Fault-Tolerant Assembly
+    fallback_an = create_heuristic_fallback_analytics(filename, raw_text)
+    
+    if isinstance(vision_res, DocumentAnalytics):
+        analytics = vision_res
+    else:
+        logger.warning(f"[WARNING] Vision LLM task did not return DocumentAnalytics result. Executing heuristic fallback.")
+        analytics = fallback_an
+
+    if isinstance(summary_res, TextResult):
+        if summary_res.summary and "unavailable" not in summary_res.summary.lower():
+            analytics.summary = summary_res.summary
+        if summary_res.keywords:
+            analytics.keywords = [k.word if hasattr(k, 'word') else str(k) for k in summary_res.keywords]
+
+    # Match bounding boxes
+    t_match_start = time.perf_counter()
+    for m in analytics.metrics:
+        p_num = m.page_number or 1
+        page_info = page_text_blocks_by_page.get(p_num) or page_text_blocks_by_page.get(1)
+        if page_info:
+            blocks = page_info["blocks"]
+            m.page_width = page_info["width"]
+            m.page_height = page_info["height"]
+            matched_bbox = match_text_to_bbox(blocks, m.context_snippet)
+            if matched_bbox:
+                m.bbox = matched_bbox
+    logger.info(f"[PERF] Spatial Bounding Box Match Heuristics: {time.perf_counter() - t_match_start:.4f}s")
+
+    # 5. Persist to DuckDB with telemetry
+    t_db_start = time.perf_counter()
+    inserted_records = save_document_analytics(filename, analytics)
+    logger.info(f"[PERF] DuckDB Write: {time.perf_counter() - t_db_start:.4f}s")
+    logger.info(f"[PERF] Total Pipeline Latency: {time.perf_counter() - t_pipeline_start:.4f}s")
+
+    return {
+        "file_name": filename,
+        "analytics": analytics.model_dump(),
+        "duckdb_persisted": True,
+        "records_inserted": inserted_records
+    }
+
