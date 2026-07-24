@@ -18,9 +18,20 @@ _READ_CONN = None
 _READ_CONN_LOCK = threading.Lock()
 
 # Ensure data directory exists
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = ROOT_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = os.getenv("DUCKDB_PATH", str(DATA_DIR / "app_data.duckdb"))
+
+raw_db_path = os.getenv("DUCKDB_PATH")
+if raw_db_path:
+    db_path_obj = Path(raw_db_path)
+    if not db_path_obj.is_absolute():
+        db_path_obj = (ROOT_DIR / raw_db_path).resolve()
+else:
+    db_path_obj = DATA_DIR / "app_data.duckdb"
+
+db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+DB_PATH = str(db_path_obj)
 
 def get_db_connection():
     """Returns a fresh connection to the embedded DuckDB database for write operations."""
