@@ -300,18 +300,30 @@ def extract_txt_document(contents: bytes, filename: str) -> DocumentAnalytics:
 def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> DocumentAnalytics:
     """
     Creates a valid DocumentAnalytics instance from raw document text by extracting
-    numbers, key-value patterns, summaries, and keyword topics.
+    numbers, key-value patterns, summaries, keyword topics, and tabular grids.
     """
     lines = [l.strip() for l in raw_text.split("\n") if l.strip() and not l.startswith("--- Page")]
     words = [w for w in raw_text.split() if len(w) > 3]
 
     metrics = []
     key_values = []
+    extracted_tables = []
 
-    # Extract numerical metric lines with regex
-    number_pattern = re.compile(r'([A-Za-z\s]{3,30})[:\s]+(\$?\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(USD|%|kg|units|MB|GB)?', re.IGNORECASE)
+    # 1. Extract Tabular Grid if present
+    from processors.ocr_processor import parse_tsv_grid
+    tsv_grid = parse_tsv_grid(raw_text)
+    if tsv_grid and tsv_grid.get("headers") and tsv_grid.get("rows"):
+        extracted_tables.append(ExtractedTable(
+            table_title=f"Extracted Table - {filename}",
+            headers=tsv_grid["headers"],
+            rows=[[str(c) if c is not None else "" for c in row] for row in tsv_grid["rows"]],
+            page_number=1
+        ))
 
-    for line in lines[:100]:
+    # 2. Extract numerical metric lines with regex
+    number_pattern = re.compile(r'([A-Za-z0-9\s_-]{3,35})[:\s\t]+(\$?\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(USD|%|kg|units|MB|GB)?', re.IGNORECASE)
+
+    for line in lines[:150]:
         match = number_pattern.search(line)
         if match:
             cat_name = match.group(1).strip()
@@ -334,7 +346,7 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
             parts = line.split(":", 1)
             k = parts[0].strip()
             v = parts[1].strip()
-            if k and v and len(k) < 30 and len(v) < 80:
+            if k and v and len(k) < 40 and len(v) < 100:
                 key_values.append(KeyValuePair(
                     key_name=k,
                     value=v,
@@ -342,9 +354,11 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
                     page_number=1
                 ))
 
-    # Summary
-    summary = "\n".join(lines[:3]) if lines else "Document content ingested successfully."
-    keywords = list(set([w.strip(".,;:()") for w in words[:20] if len(w) > 4]))[:10]
+    # 3. Summary & Keywords Fallback
+    from processors.text_processor import generate_local_fallback_text_result
+    fallback_text_res = generate_local_fallback_text_result(raw_text)
+    summary = fallback_text_res.summary
+    keywords = [k.word for k in fallback_text_res.keywords]
 
     return DocumentAnalytics(
         document_title=filename,
@@ -353,7 +367,7 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
         keywords=keywords,
         metrics=metrics,
         key_value_pairs=key_values,
-        tables=[]
+        tables=extracted_tables
     )
 
 def process_unstructured_document(file: UploadFile) -> Dict[str, Any]:
@@ -460,7 +474,7 @@ async def process_unstructured_document_async(file: UploadFile) -> Dict[str, Any
             page_num = i + 1
             page_text = page.get_text().strip()
             
-            # Native Digital PDF Check: if Page 1 has high text density (>150 chars), bypass Nemotron OCR
+            # Native Digital PDF Check: if Page 1 has low text density (<150 chars), render PNG & trigger RapidOCR fallback
             if len(page_text) < 150 or len(doc) <= 2:
                 pix = page.get_pixmap(dpi=150)
                 png_bytes = pix.tobytes("png")
@@ -474,6 +488,33 @@ async def process_unstructured_document_async(file: UploadFile) -> Dict[str, Any
                         "bbox": [b[0], b[1], b[2], b[3]],
                         "text": b[4].strip()
                     })
+
+            # Check if we should fall back to OCR coordinates for scanned/image pages
+            if len(blocks) < 2 or sum(len(b["text"]) for b in blocks) < 50:
+                try:
+                    from parsers.pdf_parser import get_ocr_engine
+                    ocr_engine = get_ocr_engine()
+                    if ocr_engine:
+                        from parsers.spatial_grid import run_ocr_with_orientation_check
+                        ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
+                        if ocr_results:
+                            blocks = []
+                            ocr_texts = []
+                            scale_factor = 72.0 / 150.0
+                            for item in ocr_results:
+                                box = item[0]
+                                text = str(item[1]).strip()
+                                if text:
+                                    ocr_texts.append(text)
+                                    xs = [pt[0] for pt in box]
+                                    ys = [pt[1] for pt in box]
+                                    blocks.append({
+                                        "bbox": [min(xs)*scale_factor, min(ys)*scale_factor, max(xs)*scale_factor, max(ys)*scale_factor],
+                                        "text": text
+                                    })
+                            page_text = "\n".join(ocr_texts)
+                except Exception as ocr_err:
+                    logger.warning(f"OCR fallback error in process_unstructured_document_async: {ocr_err}")
 
             page_text_blocks_by_page[page_num] = {
                 "blocks": blocks,

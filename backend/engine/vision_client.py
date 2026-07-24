@@ -140,7 +140,7 @@ CRITICAL EXTRACTION RULES:
                 messages=messages,
                 temperature=0.2,
                 max_tokens=4096,
-                timeout=45.0
+                timeout=10.0
             )
 
             content = completion.choices[0].message.content.strip()

@@ -19,14 +19,15 @@ _READ_CONN_LOCK = threading.Lock()
 
 # Ensure data directory exists
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = ROOT_DIR / "data"
+DATA_DIR = (ROOT_DIR / "data").resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 raw_db_path = os.getenv("DUCKDB_PATH")
 if raw_db_path:
-    db_path_obj = Path(raw_db_path)
-    if not db_path_obj.is_absolute():
-        db_path_obj = (ROOT_DIR / raw_db_path).resolve()
+    p = Path(raw_db_path)
+    if not p.is_absolute():
+        p = (ROOT_DIR / raw_db_path).resolve()
+    db_path_obj = p
 else:
     db_path_obj = DATA_DIR / "app_data.duckdb"
 

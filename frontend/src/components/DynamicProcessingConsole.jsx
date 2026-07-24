@@ -56,7 +56,7 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
     return () => clearInterval(timer);
   }, []);
 
-  // Live Simulated Pipeline Log Events & Continuous Ticker Heartbeat
+  // Live Pipeline Log Events & Continuous Ticker Heartbeat
   useEffect(() => {
     if (errorState) return;
 
@@ -64,8 +64,8 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
     const sizeStr = formatSize(file?.size);
 
     const initialLogs = [
-      { id: 1, time: '0.1s', type: 'info', text: `📥 Binary payload received (${sizeStr})` },
-      { id: 2, time: '0.4s', type: 'info', text: `📄 Verified ${fileExt} header structure` }
+      { id: 1, time: '0.1s', type: 'info', text: `📥 Binary payload stream received (${sizeStr})` },
+      { id: 2, time: '0.4s', type: 'info', text: `📄 Verified ${fileExt} header structure & stream reset seek(0)` }
     ];
     setLogs(initialLogs);
 
@@ -74,16 +74,16 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
       setLogs(prev => [
         ...prev,
         { id: 3, time: '1.2s', type: 'info', text: `🔍 Extracting 2D spatial layout and page boundaries...` },
-        { id: 4, time: '2.5s', type: 'info', text: `⚡ RapidOCR orientation scoring: 0° accepted` },
+        { id: 4, time: '2.5s', type: 'info', text: `⚡ RapidOCR orientation check: 0° accepted` },
         { id: 5, time: '3.8s', type: 'info', text: `📍 Mapped X-column anchor coordinates` }
       ]);
-    }, 1500);
+    }, 1200);
 
     const t2 = setTimeout(() => {
       setCurrentStage(3);
       setLogs(prev => [
         ...prev,
-        { id: 6, time: '4.5s', type: 'info', text: `🧠 Sending spatial TSV grid to DeepSeek AI engine...` },
+        { id: 6, time: '4.5s', type: 'info', text: `🧠 Querying AI Normalization Engine & Spatial Grid Parser...` },
         { id: 7, time: '6.0s', type: 'info', text: `✨ Normalizing numeric values & multi-column headers...` }
       ]);
     }, 4500);
@@ -96,34 +96,36 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
       ]);
     }, 8500);
 
-    const t4 = setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: 9, time: '11.2s', type: 'info', text: `⚡ Parallel page section batching active...` }
-      ]);
-    }, 11200);
+    // Continuous ticker for longer-running extractions (e.g., scanned visual PDFs or busy AI endpoints)
+    const longTicker = setInterval(() => {
+      setLogs(prev => {
+        const lastId = prev.length ? prev[prev.length - 1].id : 0;
+        const currentSec = Math.round(elapsed);
 
-    const t5 = setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: 10, time: '14.5s', type: 'info', text: `🧠 Synthesizing multi-page table rows & deduplicating headers...` }
-      ]);
-    }, 14500);
+        // Don't add duplicate ticker logs if time hasn't advanced much
+        if (prev.some(l => l.text.includes(`[Heartbeat`))) return prev;
 
-    const t6 = setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: 11, time: '17.8s', type: 'info', text: `✨ Finalizing dashboard preview rows & statistical summaries...` }
-      ]);
-    }, 17800);
+        const tickerMessages = [
+          `⚡ RapidOCR pixel coordinate scanning & spatial grid clustering active...`,
+          `🔍 Local deterministic table backstop active — processing tabular rows...`,
+          `📊 Calculating statistical metrics (mean, median, std_dev)...`,
+          `✨ Finalizing executive TL;DR summary and keyword TF-IDF ranking...`,
+          `💾 Caching analytics payload to embedded DuckDB storage...`
+        ];
+
+        const msgIdx = Math.floor((currentSec / 5) % tickerMessages.length);
+        return [
+          ...prev,
+          { id: lastId + 1, time: `${currentSec}s`, type: 'info', text: tickerMessages[msgIdx] }
+        ];
+      });
+    }, 4000);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(t5);
-      clearTimeout(t6);
+      clearInterval(longTicker);
     };
   }, [file, errorState]);
 

@@ -5,7 +5,7 @@ import TraceabilityViewer from './TraceabilityViewer';
 import StatsCards from './StatsCards';
 import ChartPanel from './ChartPanel';
 import DataTablePreview from './DataTablePreview';
-import { ArrowLeft, Database, FileText, BarChart3, Search, ArrowUpDown } from 'lucide-react';
+import { ArrowLeft, Database, FileText, BarChart3, Search, ArrowUpDown, Download, Copy, Check } from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = ({ data, onReset }) => {
@@ -14,6 +14,30 @@ const Dashboard = ({ data, onReset }) => {
   const [selectedTableIndex, setSelectedTableIndex] = useState(0);
   const [sortField, setSortField] = useState('key_name');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [copied, setCopied] = useState(false);
+
+  const handleDownloadJSON = () => {
+    if (!data) return;
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${(data.file_name || 'analytics_result').replace(/\.[^/.]+$/, '')}_full_output.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyJSON = () => {
+    if (!data) return;
+    const jsonString = JSON.stringify(data, null, 2);
+    navigator.clipboard.writeText(jsonString).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
 
   if (!data) return null;
 
@@ -108,10 +132,20 @@ const Dashboard = ({ data, onReset }) => {
   return (
     <div className="dashboard-container animate-fade-in">
       <div className="dashboard-header">
-        <button className="back-button btn-white" onClick={onReset}>
-          <ArrowLeft size={16} />
-          Upload Another File
-        </button>
+        <div className="header-action-group" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="back-button btn-white" onClick={onReset}>
+            <ArrowLeft size={16} />
+            Upload Another File
+          </button>
+          <button className="btn-white btn-export" onClick={handleDownloadJSON} title="Download complete output as a JSON file">
+            <Download size={15} style={{ color: 'var(--brand-purple)' }} />
+            Export JSON
+          </button>
+          <button className="btn-white btn-export" onClick={handleCopyJSON} title="Copy complete output JSON to clipboard">
+            {copied ? <Check size={15} color="#22c55e" /> : <Copy size={15} style={{ color: 'var(--brand-purple)' }} />}
+            {copied ? 'Copied!' : 'Copy JSON'}
+          </button>
+        </div>
         
         <div className="file-info">
           <span className="file-icon-wrapper">
