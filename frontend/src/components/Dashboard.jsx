@@ -49,6 +49,10 @@ const Dashboard = ({ data, onReset }) => {
     if (isTabular) {
       return (activeTab === 'overview' || activeTab === 'preview') ? activeTab : 'overview';
     }
+    // Auto-triage: Default to 'summary' tab for qualitative documents (syllabi, brochures, policies with zero metrics)
+    const isQualitative = data.data_category === 'qualitative_document' || 
+      (data.analytics && (!data.analytics.metrics || data.analytics.metrics.length === 0) && (!data.analytics.tables || data.analytics.tables.length === 0));
+
     const validTabs = ['overview', 'summary', 'keywords'];
     if (data.analytics && data.analytics.tables && data.analytics.tables.length > 0) {
       validTabs.push('tables');
@@ -56,7 +60,10 @@ const Dashboard = ({ data, onReset }) => {
     if (hasTraceability) {
       validTabs.push('traceability');
     }
-    return validTabs.includes(activeTab) ? activeTab : 'overview';
+    if (!validTabs.includes(activeTab)) {
+      return isQualitative ? 'summary' : 'overview';
+    }
+    return activeTab;
   };
 
   const currentTab = getValidTab();
@@ -254,11 +261,39 @@ const Dashboard = ({ data, onReset }) => {
         {/* Overview Analytics for Documents (KPI cards, charts, attributes grid) */}
         {!isTabular && currentTab === 'overview' && data.analytics && (
           <div className="document-analytics-overview animate-fade-in">
-            {/* KPI Cards Section */}
-            {kpiMetrics.length > 0 && (
+            {/* KPI Cards Section or Qualitative Document Outline */}
+            {kpiMetrics.length > 0 ? (
               <div className="kpi-cards-section">
                 <h3 className="section-title">Key Performance Indicators</h3>
                 <StatsCards metrics={kpiMetrics} />
+              </div>
+            ) : (
+              <div className="qualitative-outline-section glass-panel" style={{ padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+                <h3 className="section-title" style={{ marginTop: 0 }}>📘 Qualitative Document Outline</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
+                  This document contains qualitative syllabus / curriculum topics and key concept highlights instead of numeric metrics.
+                </p>
+                {data.analytics?.qualitative_sections && data.analytics.qualitative_sections.length > 0 ? (
+                  <div className="qualitative-topics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                    {data.analytics.qualitative_sections[0].main_topics.map((topic, tIdx) => (
+                      <div key={tIdx} className="topic-card" style={{ padding: '14px', borderRadius: '8px', background: 'rgba(106, 27, 154, 0.04)', border: '1px solid rgba(106, 27, 154, 0.12)' }}>
+                        <h4 style={{ margin: '0 0 8px 0', color: 'var(--brand-purple)', fontSize: '0.95rem' }}>{topic.title}</h4>
+                        {topic.description && <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{topic.description}</p>}
+                        {topic.subtopics && topic.subtopics.length > 0 && (
+                          <div className="subtopic-badges" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {topic.subtopics.map((sub, sIdx) => (
+                              <span key={sIdx} style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+                                {sub}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>Structured topics extracted below in Key-Value attributes and Executive Summary.</p>
+                )}
               </div>
             )}
 

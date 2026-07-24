@@ -5,7 +5,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from fastapi import UploadFile
 
-from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable
+from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable, TopicOutline, QualitativeSection
 from engine.vision_client import extract_analytics_with_vision
 from engine.db import save_document_analytics
 
@@ -355,10 +355,47 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
                 ))
 
     # 3. Summary & Keywords Fallback
-    from processors.text_processor import generate_local_fallback_text_result
+    from processors.text_processor import generate_local_fallback_text_result, extract_qualitative_sections
     fallback_text_res = generate_local_fallback_text_result(raw_text)
     summary = fallback_text_res.summary
     keywords = [k.word for k in fallback_text_res.keywords]
+
+    # 4. Qualitative Document Triage & Section Extraction
+    qualitative_sections = []
+    QUANTITATIVE_SIGNALS = {'payroll', 'losses', 'premium', 'claim', 'amount', 'revenue', 'cost', 'total', 'ratio', 'expenditure', 'balance', 'fee', 'price', 'rate', 'xmod', 'sales', 'profit', 'margin', 'asset', 'liability'}
+    has_quant_signals = any(sig in raw_text.lower() for sig in QUANTITATIVE_SIGNALS)
+
+    if len(metrics) == 0 and len(extracted_tables) == 0 and not has_quant_signals:
+        qual_res = extract_qualitative_sections(raw_text)
+        for qs in qual_res:
+            main_topics = [
+                TopicOutline(
+                    title=t.title,
+                    description=t.description,
+                    subtopics=t.subtopics
+                ) for t in qs.main_topics
+            ]
+            qualitative_sections.append(QualitativeSection(
+                document_type=qs.document_type,
+                main_topics=main_topics,
+                extracted_highlights=qs.extracted_highlights
+            ))
+            # Auto-populate key_value_pairs from extracted highlights and top topics
+            for highlight in qs.extracted_highlights[:10]:
+                key_values.append(KeyValuePair(
+                    key_name="Key Concept",
+                    value=highlight,
+                    context_snippet=f"Highlight concept: {highlight}",
+                    page_number=1
+                ))
+            for topic in main_topics[:6]:
+                if topic.title and topic.subtopics:
+                    key_values.append(KeyValuePair(
+                        key_name=f"Module: {topic.title}",
+                        value=", ".join(topic.subtopics[:4]),
+                        context_snippet=topic.description or topic.title,
+                        page_number=1
+                    ))
 
     return DocumentAnalytics(
         document_title=filename,
@@ -367,7 +404,8 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
         keywords=keywords,
         metrics=metrics,
         key_value_pairs=key_values,
-        tables=extracted_tables
+        tables=extracted_tables,
+        qualitative_sections=qualitative_sections
     )
 
 def process_unstructured_document(file: UploadFile) -> Dict[str, Any]:

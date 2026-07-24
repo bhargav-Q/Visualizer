@@ -39,14 +39,14 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
     return filename.split('.').pop().toUpperCase();
   };
 
-  const logsEndRef = React.useRef(null);
+  const terminalBodyRef = React.useRef(null);
 
-  // Auto-scroll terminal body to bottom whenever logs update or time ticks
+  // Auto-scroll inside the terminal body ONLY (does not scroll the main browser window)
   useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (terminalBodyRef.current) {
+      terminalBodyRef.current.scrollTop = terminalBodyRef.current.scrollHeight;
     }
-  }, [logs, elapsed]);
+  }, [logs]);
 
   // Stopwatch timer
   useEffect(() => {
@@ -56,7 +56,7 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
     return () => clearInterval(timer);
   }, []);
 
-  // Live Pipeline Log Events & Continuous Ticker Heartbeat
+  // Live Pipeline Log Events - Clean milestone sequence without repeating ticker loop
   useEffect(() => {
     if (errorState) return;
 
@@ -65,7 +65,7 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
 
     const initialLogs = [
       { id: 1, time: '0.1s', type: 'info', text: `📥 Binary payload stream received (${sizeStr})` },
-      { id: 2, time: '0.4s', type: 'info', text: `📄 Verified ${fileExt} header structure & stream reset seek(0)` }
+      { id: 2, time: '0.4s', type: 'info', text: `📄 Verified ${fileExt} header structure & stream seek(0)` }
     ];
     setLogs(initialLogs);
 
@@ -73,9 +73,8 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
       setCurrentStage(2);
       setLogs(prev => [
         ...prev,
-        { id: 3, time: '1.2s', type: 'info', text: `🔍 Extracting 2D spatial layout and page boundaries...` },
-        { id: 4, time: '2.5s', type: 'info', text: `⚡ RapidOCR orientation check: 0° accepted` },
-        { id: 5, time: '3.8s', type: 'info', text: `📍 Mapped X-column anchor coordinates` }
+        { id: 3, time: '1.2s', type: 'info', text: `🔍 Extracting 2D spatial layout & page bounding boxes...` },
+        { id: 4, time: '2.5s', type: 'info', text: `⚡ RapidOCR orientation check: 0° accepted` }
       ]);
     }, 1200);
 
@@ -83,8 +82,8 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
       setCurrentStage(3);
       setLogs(prev => [
         ...prev,
-        { id: 6, time: '4.5s', type: 'info', text: `🧠 Querying AI Normalization Engine & Spatial Grid Parser...` },
-        { id: 7, time: '6.0s', type: 'info', text: `✨ Normalizing numeric values & multi-column headers...` }
+        { id: 5, time: '4.5s', type: 'info', text: `🧠 Processing qualitative & tabular section normalization...` },
+        { id: 6, time: '6.0s', type: 'info', text: `✨ Extracting structured modules & key topic concepts...` }
       ]);
     }, 4500);
 
@@ -92,40 +91,14 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
       setCurrentStage(4);
       setLogs(prev => [
         ...prev,
-        { id: 8, time: '8.5s', type: 'info', text: `📊 Structuring bar/line charts and categorical frequencies...` }
+        { id: 7, time: '8.5s', type: 'info', text: `📊 Finalizing analytics & caching to embedded DuckDB storage...` }
       ]);
     }, 8500);
-
-    // Continuous ticker for longer-running extractions (e.g., scanned visual PDFs or busy AI endpoints)
-    const longTicker = setInterval(() => {
-      setLogs(prev => {
-        const lastId = prev.length ? prev[prev.length - 1].id : 0;
-        const currentSec = Math.round(elapsed);
-
-        // Don't add duplicate ticker logs if time hasn't advanced much
-        if (prev.some(l => l.text.includes(`[Heartbeat`))) return prev;
-
-        const tickerMessages = [
-          `⚡ RapidOCR pixel coordinate scanning & spatial grid clustering active...`,
-          `🔍 Local deterministic table backstop active — processing tabular rows...`,
-          `📊 Calculating statistical metrics (mean, median, std_dev)...`,
-          `✨ Finalizing executive TL;DR summary and keyword TF-IDF ranking...`,
-          `💾 Caching analytics payload to embedded DuckDB storage...`
-        ];
-
-        const msgIdx = Math.floor((currentSec / 5) % tickerMessages.length);
-        return [
-          ...prev,
-          { id: lastId + 1, time: `${currentSec}s`, type: 'info', text: tickerMessages[msgIdx] }
-        ];
-      });
-    }, 4000);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
-      clearInterval(longTicker);
     };
   }, [file, errorState]);
 
@@ -221,7 +194,7 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
           <Terminal size={14} />
           <span>AI Pipeline Engine Live Output Ticker</span>
         </div>
-        <div className="terminal-body">
+        <div className="terminal-body" ref={terminalBodyRef}>
           {logs.map((l) => (
             <div key={l.id} className={`log-line log-${l.type}`}>
               <span className="log-time">[{l.time}]</span>
@@ -233,7 +206,6 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
               <span className="cursor-blink">▌</span>
             </div>
           )}
-          <div ref={logsEndRef} />
         </div>
       </div>
 

@@ -176,6 +176,18 @@ async def upload_file(file: UploadFile = File(...)):
                 tabular_data = process_tabular_data(raw_table)
                 data_category = "mixed"
 
+            # Qualitative Document Triage with Quantitative Protection Signal
+            QUANTITATIVE_SIGNALS = {'payroll', 'losses', 'premium', 'claim', 'amount', 'revenue', 'cost', 'total', 'ratio', 'expenditure', 'balance', 'fee', 'price', 'rate', 'xmod', 'sales', 'profit', 'margin', 'asset', 'liability'}
+            has_quant_signals = any(sig in parsed_data["text"].lower() for sig in QUANTITATIVE_SIGNALS)
+            has_metrics = analytics_data and getattr(analytics_data, "metrics", None) and len(analytics_data.metrics) > 0
+            
+            if not tabular_data and not has_metrics and not has_quant_signals:
+                data_category = "qualitative_document"
+
+            # Synchronize qualitative_sections on analytics payload if missing
+            if analytics_data and not getattr(analytics_data, "qualitative_sections", None) and text_data and getattr(text_data, "qualitative_sections", None):
+                analytics_data.qualitative_sections = text_data.qualitative_sections
+
             response_payload = UploadResponse(
                 file_name=file.filename,
                 file_type="pdf",

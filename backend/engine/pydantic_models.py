@@ -76,6 +76,16 @@ class ExtractedTable(BaseModel):
                 clean_matrix.append(clean_row)
         return clean_matrix
 
+class TopicOutline(BaseModel):
+    title: str = Field(default="Main Module", description="Topic or module title")
+    description: Optional[str] = Field(default="", description="Summary of topic contents")
+    subtopics: List[str] = Field(default_factory=list, description="Subtopics or skills taught")
+
+class QualitativeSection(BaseModel):
+    document_type: str = Field(default="Document Outline", description="Classified qualitative document category")
+    main_topics: List[TopicOutline] = Field(default_factory=list, description="Structured topic breakdown")
+    extracted_highlights: List[str] = Field(default_factory=list, description="Key skills or highlight tags")
+
 class DocumentAnalytics(BaseModel):
     document_title: Optional[str] = Field(default="Untitled Document", description="Extracted document title")
     report_date: Optional[str] = Field(default=None, description="Extracted document date")
@@ -84,6 +94,7 @@ class DocumentAnalytics(BaseModel):
     metrics: List[ExtractedMetric] = Field(default_factory=list, description="All numerical metrics")
     key_value_pairs: List[KeyValuePair] = Field(default_factory=list, description="Extracted key-value facts")
     tables: List[ExtractedTable] = Field(default_factory=list, description="Extracted table grids")
+    qualitative_sections: List[QualitativeSection] = Field(default_factory=list, description="Qualitative module breakdown")
 
     @field_validator("document_title", "summary", mode="before")
     @classmethod

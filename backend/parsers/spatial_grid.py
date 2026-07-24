@@ -273,12 +273,14 @@ def run_parallel_spatial_ocr(doc, ocr_engine, dpi: int = 150, min_confidence: fl
     if not doc or ocr_engine is None or len(doc) == 0:
         return "", []
 
+    MAX_OCR_PAGES = 15
     page_count = len(doc)
-    worker_count = min(page_count, max_workers)
+    scan_limit = min(page_count, MAX_OCR_PAGES)
+    worker_count = min(scan_limit, max_workers)
 
     tasks = [
         (idx, doc[idx], ocr_engine, dpi, min_confidence)
-        for idx in range(page_count)
+        for idx in range(scan_limit)
     ]
 
     page_results = [None] * page_count

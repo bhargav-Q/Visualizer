@@ -40,6 +40,16 @@ class KeywordItem(BaseModel):
     word: str
     score: float
 
+class TopicOutlineResponse(BaseModel):
+    title: str = "Main Module"
+    description: Optional[str] = ""
+    subtopics: List[str] = []
+
+class QualitativeSectionResponse(BaseModel):
+    document_type: str = "Document Outline"
+    main_topics: List[TopicOutlineResponse] = []
+    extracted_highlights: List[str] = []
+
 class TextResult(BaseModel):
     summary: str
     keywords: List[KeywordItem]
@@ -47,6 +57,7 @@ class TextResult(BaseModel):
     page_count: Optional[int] = None
     paragraph_count: Optional[int] = None
     ai_model: str
+    qualitative_sections: Optional[List[QualitativeSectionResponse]] = []
 
 class ExtractedMetricResponse(BaseModel):
     category: str
@@ -78,6 +89,7 @@ class DocumentAnalyticsResponse(BaseModel):
     metrics: List[ExtractedMetricResponse] = []
     key_value_pairs: List[KeyValuePairResponse] = []
     tables: List[ExtractedTableResponse] = []
+    qualitative_sections: List[QualitativeSectionResponse] = []
 
 class UploadResponse(BaseModel):
     file_name: str

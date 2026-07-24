@@ -23,17 +23,36 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
       try {
         setLoading(true);
         const res = await axios.get(`${API_BASE_URL}/api/documents/${encodeURIComponent(fileName)}/metrics`);
-        // Filter down to only metric type records for coordinate tracing
-        const metricRecords = res.data.filter(r => r.data_type === 'metric');
-        setMetrics(metricRecords);
+        // Filter down to metric type records for coordinate tracing
+        let records = res.data.filter(r => r.data_type === 'metric');
+        
+        // Qualitative Fallback: if no numeric metrics found, fall back to kv_pair / table records
+        if (records.length === 0) {
+          records = res.data.map(r => ({
+            ...r,
+            metric_value: r.metric_value !== null && r.metric_value !== undefined ? r.metric_value : r.category
+          }));
+        }
+        setMetrics(records);
         setError(null);
       } catch (err) {
         console.error("Error fetching DuckDB metrics:", err);
         // Fall back to initial upload response if API fetch fails
-        if (initialAnalytics && initialAnalytics.metrics) {
+        if (initialAnalytics && initialAnalytics.metrics && initialAnalytics.metrics.length > 0) {
           setMetrics(initialAnalytics.metrics);
+        } else if (initialAnalytics && initialAnalytics.key_value_pairs && initialAnalytics.key_value_pairs.length > 0) {
+          const kvRecords = initialAnalytics.key_value_pairs.map((kv, idx) => ({
+            id: `kv-${idx}`,
+            category: kv.key_name,
+            metric_value: kv.value,
+            unit: "",
+            context_snippet: kv.context_snippet || `${kv.key_name}: ${kv.value}`,
+            page_number: kv.page_number || 1,
+            bbox: kv.bbox || null
+          }));
+          setMetrics(kvRecords);
         } else {
-          setError("Failed to fetch coordinates from metrics database.");
+          setError("No extracted metrics or key attributes available for coordinate tracing.");
         }
       } finally {
         setLoading(false);
@@ -63,7 +82,6 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
     document.body.appendChild(script);
 
     return () => {
-      // Clean up script if unmounted before loading
       if (document.body.contains(script)) {
         document.body.removeChild(script);
       }
@@ -112,9 +130,11 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
 
   // Filtered metrics
   const filteredMetrics = metrics.filter(m => {
-    const searchStr = `${m.category} ${m.metric_value} ${m.unit || ''} ${m.context_snippet}`.toLowerCase();
+    const searchStr = `${m.category} ${m.metric_value || ''} ${m.unit || ''} ${m.context_snippet || ''}`.toLowerCase();
     return searchStr.includes(filterText.toLowerCase());
   });
+
+  const isQualitativeTrace = metrics.some(m => typeof m.metric_value === 'string' && isNaN(Number(m.metric_value)));
 
   return (
     <div className="trace-viewer-container glass-panel animate-fade-in">
@@ -123,9 +143,13 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
         <div className="sidebar-header">
           <h3>
             <Compass className="icon-purple" size={18} />
-            Extracted Metrics
+            {isQualitativeTrace ? "Key Concepts & Topics" : "Extracted Metrics"}
           </h3>
-          <p className="sidebar-subtitle">Hover or click a metric card to visually trace it to the source text.</p>
+          <p className="sidebar-subtitle">
+            {isQualitativeTrace 
+              ? "Hover or click a module topic card to view its source page."
+              : "Hover or click a metric card to visually trace it to the source text."}
+          </p>
           
           <div className="search-wrapper">
             <Search className="search-icon" size={14} />
@@ -150,12 +174,13 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
           </div>
         ) : filteredMetrics.length === 0 ? (
           <div className="sidebar-empty">
-            <p>No matching metrics found.</p>
+            <p>No matching items found.</p>
           </div>
         ) : (
           <div className="metrics-list scroll-shadows">
             {filteredMetrics.map((m) => {
               const hasBbox = m.bbox && m.bbox.length === 4;
+              const displayVal = typeof m.metric_value === 'number' ? m.metric_value.toLocaleString() : (m.metric_value || m.category);
               return (
                 <div 
                   key={m.id || `${m.category}-${m.metric_value}`}
@@ -167,10 +192,8 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
                     }
                   }}
                   onClick={() => {
-                    if (hasBbox) {
-                      setActiveMetricId(m.id);
-                      scrollToPage(m.page_number || 1);
-                    }
+                    setActiveMetricId(m.id);
+                    scrollToPage(m.page_number || 1);
                   }}
                 >
                   <div className="card-top">
@@ -179,15 +202,17 @@ const TraceabilityViewer = ({ fileName, initialAnalytics }) => {
                   </div>
                   
                   <div className="metric-val-display">
-                    <span className="metric-value-num">
-                      {m.metric_value.toLocaleString()}
+                    <span className="metric-value-num" style={{ fontSize: typeof m.metric_value === 'number' ? '1.1rem' : '0.9rem' }}>
+                      {displayVal}
                     </span>
                     {m.unit && <span className="metric-unit-text">{m.unit}</span>}
                   </div>
 
-                  <div className="metric-snippet">
-                    &ldquo;{m.context_snippet}&rdquo;
-                  </div>
+                  {m.context_snippet && (
+                    <div className="metric-snippet">
+                      &ldquo;{m.context_snippet}&rdquo;
+                    </div>
+                  )}
 
                   {hasBbox ? (
                     <div className="trace-action-indicator">
