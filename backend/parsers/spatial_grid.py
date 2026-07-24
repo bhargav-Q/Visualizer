@@ -2,13 +2,14 @@ import fitz  # PyMuPDF
 import logging
 import re
 import concurrent.futures
+from config import DEFAULT_MIN_CONFIDENCE, MIN_PIXEL_GAP_THRESHOLD, GAP_THRESHOLD_RATIO_DEFAULT
 
 logger = logging.getLogger(__name__)
 
 # Regex pattern matching scanner noise, lines, or non-alphanumeric artifacts
 NOISE_ARTIFACT_PATTERN = re.compile(r'^[\-_~|+=`"\s]+$')
 
-def filter_ocr_results_by_confidence(raw_ocr_results: list, min_confidence: float = 0.50) -> list:
+def filter_ocr_results_by_confidence(raw_ocr_results: list, min_confidence: float = DEFAULT_MIN_CONFIDENCE) -> list:
     """
     Gap 4 Fix: Confidence & Noise Filtering for RapidOCR output detections.
     RapidOCR output item format: [ [box_coords], text_str, confidence_score ]
@@ -43,7 +44,7 @@ def filter_ocr_results_by_confidence(raw_ocr_results: list, min_confidence: floa
 
     return filtered
 
-def merge_row_tokens_into_cells(row_items, gap_threshold_ratio=0.8):
+def merge_row_tokens_into_cells(row_items, gap_threshold_ratio=GAP_THRESHOLD_RATIO_DEFAULT):
     """
     Patch A1: Merges adjacent OCR text tokens into unified multi-word cells
     based on horizontal pixel gap threshold.
@@ -54,7 +55,7 @@ def merge_row_tokens_into_cells(row_items, gap_threshold_ratio=0.8):
     heights = [item["height"] for item in row_items if item["height"] > 0]
     median_h = sorted(heights)[len(heights) // 2] if heights else 15.0
     median_char_w = median_h * 0.5
-    gap_threshold = max(6.0, median_char_w * gap_threshold_ratio)
+    gap_threshold = max(MIN_PIXEL_GAP_THRESHOLD, median_char_w * gap_threshold_ratio)
 
     cells = []
     curr_tokens = [row_items[0]["text"]]

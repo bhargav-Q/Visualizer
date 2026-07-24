@@ -43,7 +43,7 @@ def parse_pdf(file: UploadFile) -> dict:
         
         # Process pages in controlled chunks of 5 pages to prevent RAM spikes
         from processors.resource_manager import chunk_list, collect_garbage
-        MAX_OCR_PAGES = 15
+        from config import MAX_OCR_PAGES, SPARSE_TEXT_THRESHOLD_CHARS
         ocr_pages_scanned = 0
 
         for chunk_idx, page_chunk in enumerate(chunk_list(list(doc), chunk_size=5)):
@@ -55,8 +55,8 @@ def parse_pdf(file: UploadFile) -> dict:
                 ocr_text = ""
                 grid_rows = []
                 
-                # Trigger OCR if page has sparse/empty text (<150 chars) and under MAX_OCR_PAGES budget
-                if len(native_text) < 150 and ocr_engine and ocr_pages_scanned < MAX_OCR_PAGES:
+                # Trigger OCR if page has sparse/empty text and under MAX_OCR_PAGES budget
+                if len(native_text) < SPARSE_TEXT_THRESHOLD_CHARS and ocr_engine and ocr_pages_scanned < MAX_OCR_PAGES:
                     ocr_pages_scanned += 1
                     try:
                         from parsers.spatial_grid import reconstruct_grid_from_ocr, run_ocr_with_orientation_check

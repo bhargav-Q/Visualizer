@@ -13,6 +13,8 @@ from parsers.image_parser import parse_image
 from processors.tabular_processor import process_tabular_data
 from processors.text_processor import process_text
 from processors.ocr_processor import extract_tables_from_text, parse_tsv_grid
+from config import MAX_FILE_SIZE_BYTES, DEFAULT_ALLOWED_ORIGINS, DEFAULT_PORT, DEFAULT_HOST, BACKEND_DIR, ROOT_DIR, DATA_DIR
+from constants import QUANTITATIVE_SIGNALS
 
 # Suppress harmless pdfminer warnings about fonts
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
@@ -21,9 +23,6 @@ logger = logging.getLogger(__name__)
 
 from pathlib import Path
 import os
-BACKEND_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BACKEND_DIR.parent
-DATA_DIR = ROOT_DIR / "data"
 DOCUMENTS_DIR = DATA_DIR / "documents"
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -35,7 +34,8 @@ load_dotenv()
 app = FastAPI(title="Visualizer API")
 
 # Allow React frontend to communicate with backend dynamically from ALLOWED_ORIGINS env var
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS")
+allowed_origins = raw_origins.split(",") if raw_origins else DEFAULT_ALLOWED_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,12 +53,12 @@ async def upload_file(file: UploadFile = File(...)):
         
     filename = file.filename.lower()
     
-    # File size check (16MB)
+    # File size check
     file.file.seek(0, 2) # seek to end
     file_size = file.file.tell()
     file.file.seek(0)    # reset to start
     
-    if file_size > 16 * 1024 * 1024:
+    if file_size > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 16MB.")
         
     try:
@@ -177,7 +177,6 @@ async def upload_file(file: UploadFile = File(...)):
                 data_category = "mixed"
 
             # Qualitative Document Triage with Quantitative Protection Signal
-            QUANTITATIVE_SIGNALS = {'payroll', 'losses', 'premium', 'claim', 'amount', 'revenue', 'cost', 'total', 'ratio', 'expenditure', 'balance', 'fee', 'price', 'rate', 'xmod', 'sales', 'profit', 'margin', 'asset', 'liability'}
             has_quant_signals = any(sig in parsed_data["text"].lower() for sig in QUANTITATIVE_SIGNALS)
             has_metrics = analytics_data and getattr(analytics_data, "metrics", None) and len(analytics_data.metrics) > 0
             
@@ -372,4 +371,5 @@ def get_document_pdf_api(file_name: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host=DEFAULT_HOST, port=DEFAULT_PORT, reload=True)
+

@@ -8,24 +8,26 @@ from dotenv import load_dotenv
 from typing import Optional
 from openai import OpenAI, AsyncOpenAI
 from engine.pydantic_models import DocumentAnalytics
+from config import VISION_API_TIMEOUT_SECONDS, CIRCUIT_BREAKER_COOLDOWN_SECONDS
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
 
-VISION_MODEL_NAME = "meta/llama-3.2-11b-vision-instruct"
+VISION_MODEL_NAME = os.getenv("NEMOTRON_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
 
-# Shared HTTPX 15-second resilient timeout configuration
-TIMEOUT_CONFIG = httpx.Timeout(15.0, connect=5.0)
+# Shared HTTPX resilient timeout configuration
+TIMEOUT_CONFIG = httpx.Timeout(VISION_API_TIMEOUT_SECONDS, connect=5.0)
 
 def get_openai_client() -> Optional[OpenAI]:
     """Returns an OpenAI client initialized with NVIDIA NIM base URL."""
     if not api_key:
         logger.warning("NVIDIA_API_KEY is missing from environment")
         return None
+    nim_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
     return OpenAI(
-        base_url="https://integrate.api.nvidia.com/v1",
+        base_url=nim_url,
         api_key=api_key,
         http_client=httpx.Client(timeout=TIMEOUT_CONFIG),
         max_retries=1
@@ -36,8 +38,9 @@ def get_async_openai_client() -> Optional[AsyncOpenAI]:
     if not api_key:
         logger.warning("NVIDIA_API_KEY is missing from environment")
         return None
+    nim_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
     return AsyncOpenAI(
-        base_url="https://integrate.api.nvidia.com/v1",
+        base_url=nim_url,
         api_key=api_key,
         http_client=httpx.AsyncClient(timeout=TIMEOUT_CONFIG),
         max_retries=1
@@ -54,7 +57,7 @@ def is_vision_api_disabled() -> bool:
     global _api_disabled_until
     return time.time() < _api_disabled_until
 
-def disable_vision_api(seconds: float = 60.0):
+def disable_vision_api(seconds: float = CIRCUIT_BREAKER_COOLDOWN_SECONDS):
     global _api_disabled_until
     _api_disabled_until = time.time() + seconds
     logger.warning(f"NVIDIA API disabled globally for {seconds} seconds.")

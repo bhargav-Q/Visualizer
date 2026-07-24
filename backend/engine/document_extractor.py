@@ -8,6 +8,7 @@ from fastapi import UploadFile
 from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable, TopicOutline, QualitativeSection
 from engine.vision_client import extract_analytics_with_vision
 from engine.db import save_document_analytics
+from constants import QUANTITATIVE_SIGNALS, MIN_KEYWORD_MATCH_LEN
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def match_text_to_bbox(page_text_blocks: List[Dict[str, Any]], snippet: str) -> 
                 return [round(float(c), 2) for c in bbox]
 
     # Partial keyword match fallback
-    words = [w for w in clean_snippet.split() if len(w) > 3]
+    words = [w for w in clean_snippet.split() if len(w) > MIN_KEYWORD_MATCH_LEN]
     if words:
         first_word = words[0]
         for block in page_text_blocks:
@@ -362,7 +363,6 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
 
     # 4. Qualitative Document Triage & Section Extraction
     qualitative_sections = []
-    QUANTITATIVE_SIGNALS = {'payroll', 'losses', 'premium', 'claim', 'amount', 'revenue', 'cost', 'total', 'ratio', 'expenditure', 'balance', 'fee', 'price', 'rate', 'xmod', 'sales', 'profit', 'margin', 'asset', 'liability'}
     has_quant_signals = any(sig in raw_text.lower() for sig in QUANTITATIVE_SIGNALS)
 
     if len(metrics) == 0 and len(extracted_tables) == 0 and not has_quant_signals:

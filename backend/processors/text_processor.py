@@ -8,6 +8,7 @@ import httpx
 from openai import OpenAI, AsyncOpenAI
 from models.schemas import TextResult, KeywordItem, QualitativeSectionResponse, TopicOutlineResponse
 from engine.vision_client import is_vision_api_disabled, disable_vision_api
+from constants import DocumentDomain, ENGLISH_STOPWORDS, MIN_TOPIC_TITLE_LEN
 
 logger = logging.getLogger(__name__)
 
@@ -19,21 +20,6 @@ env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
-
-ENGLISH_STOPWORDS = {
-    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't",
-    "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by",
-    "can", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't",
-    "down", "during", "each", "few", "for", "from", "further", "had", "hadn't", "has", "hasn't",
-    "have", "haven't", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", "how",
-    "i", "if", "in", "into", "is", "isn't", "it", "its", "itself", "just", "me", "more", "most", "my",
-    "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "our", "ours",
-    "ourselves", "out", "over", "own", "same", "she", "should", "shouldn't", "so", "some", "such",
-    "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there", "these", "they",
-    "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we",
-    "were", "weren't", "what", "when", "where", "which", "while", "who", "whom", "why", "with", "would",
-    "wouldn't", "you", "your", "yours", "yourself", "yourselves", "page", "total", "date", "null", "none"
-}
 
 def extract_qualitative_sections(raw_text: str) -> List[QualitativeSectionResponse]:
     """
@@ -56,22 +42,22 @@ def extract_qualitative_sections(raw_text: str) -> List[QualitativeSectionRespon
 
         lower_text = text.lower()
         if any(k in lower_text for k in ['losses', 'payroll', 'policy', 'xmod', 'premium', 'claim', 'insurance', 'underwriting', 'coverage', 'deductible']):
-            doc_type = "Insurance / Financial Submission"
+            doc_type = DocumentDomain.INSURANCE_FINANCIAL
         elif any(k in lower_text for k in ['curriculum', 'syllabus', 'module', 'course', 'student', 'java', 'python']):
-            doc_type = "Curriculum / Syllabus"
+            doc_type = DocumentDomain.CURRICULUM_SYLLABUS
         else:
-            doc_type = "Business Document Outline"
+            doc_type = DocumentDomain.BUSINESS_OUTLINE
 
         for line in lines[:100]:
             if (len(line) < 70 and (line.isupper() or line.endswith(":") or re.match(r'^(Module|Unit|Chapter|Section|\d+\.)', line, re.I))):
                 cleaned_t = re.sub(r'^[0-9.:\-\s]+', '', line).strip()
-                if curr_title and len(curr_title) >= 3:
+                if curr_title and len(curr_title) >= MIN_TOPIC_TITLE_LEN:
                     topics.append(TopicOutlineResponse(
                         title=curr_title,
                         description=f"Overview of {curr_title}",
                         subtopics=curr_subtopics[:6]
                     ))
-                curr_title = cleaned_t if len(cleaned_t) >= 3 else None
+                curr_title = cleaned_t if len(cleaned_t) >= MIN_TOPIC_TITLE_LEN else None
                 curr_subtopics = []
             elif curr_title and (line.startswith(("-", "*", "•")) or ":" in line):
                 sub_text = re.sub(r'^[\-*•\s]+', '', line).strip()
