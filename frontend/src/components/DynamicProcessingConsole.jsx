@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   FileCode
 } from 'lucide-react';
+import { STOPWATCH_INTERVAL_MS } from '../utils/constants';
 import './DynamicProcessingConsole.css';
 
 const STAGES = [
@@ -52,7 +53,7 @@ const DynamicProcessingConsole = ({ file, errorState, onRetry, onUseLocalFallbac
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsed(prev => prev + 0.1);
-    }, 100);
+    }, STOPWATCH_INTERVAL_MS * 10);
     return () => clearInterval(timer);
   }, []);
 

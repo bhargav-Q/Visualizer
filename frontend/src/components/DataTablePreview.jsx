@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Table, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { DEFAULT_PAGE_SIZE } from '../utils/constants';
 import './DataTablePreview.css';
 
-const ROWS_PER_PAGE = 10;
+const ROWS_PER_PAGE = DEFAULT_PAGE_SIZE;
 
 const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
   const [currentPage, setCurrentPage] = useState(1);

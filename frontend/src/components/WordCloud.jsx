@@ -1,11 +1,12 @@
 import React from 'react';
 import { BarChart2 } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
+import { MIN_WORD_CLOUD_FONT_SIZE, PIE_COLORS } from '../utils/constants';
 import './WordCloud.css';
 
 const WordCloud = ({ keywords }) => {
   // Brand specific palette matching category colors
-  const colors = ['#6a1b9a', '#9c4dcc', '#2563eb', '#22c55e', '#d97700', '#dc2626'];
+  const colors = PIE_COLORS;
 
   return (
     <div className="wordcloud-section glass-panel">

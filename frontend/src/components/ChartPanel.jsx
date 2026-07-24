@@ -4,9 +4,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, Label, PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { PIE_COLORS } from '../utils/constants';
 import './ChartPanel.css';
-
-const PIE_COLORS = ['#6a1b9a', '#9c4dcc', '#2563eb', '#22c55e', '#d97700', '#dc2626'];
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
