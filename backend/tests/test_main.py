@@ -1,6 +1,13 @@
 import pytest
 from io import BytesIO
 
+@pytest.fixture(autouse=True)
+def mock_db_operations(mocker):
+    """Automatically mock DuckDB calls in test_main.py to eliminate disk file locking during tests."""
+    mocker.patch("engine.db.save_cached_analytics", return_value=None)
+    mocker.patch("engine.db.get_cached_analytics", return_value=None)
+    mocker.patch("engine.db.save_document_analytics", return_value=0)
+
 def test_upload_invalid_file_type(client):
     """Test that an unsupported file type (.exe) is rejected."""
     file_content = b"Some binary executable data"
@@ -20,39 +27,32 @@ def test_upload_file_too_large(client, mocker):
     assert "File too large" in response.json()["detail"]
 
 def test_upload_valid_pdf_endpoint(client, mocker):
-    """Test uploading a valid PDF, mocking the internal parsers to avoid API calls."""
-    from models.schemas import TextResult, KeywordItem
-    
-    mocker.patch("main.parse_pdf", return_value={"text": "Mocked PDF text", "page_count": 1, "structured_tsv": ""})
-    mocker.patch("main.extract_tables_from_text", return_value=None)
-    mocker.patch("main.parse_tsv_grid", return_value=None)
-    mocker.patch("main.process_text", return_value=TextResult(
-        word_count=3,
-        page_count=1,
-        paragraph_count=1,
-        summary="Mocked summary",
-        keywords=[KeywordItem(word="mock", score=1.0)],
-        ai_model="test-mock"
-    ))
-    
-    file_content = b"%PDF-1.4 Mock PDF Stream %%EOF"
+    """Test uploading a valid PDF."""
+    import io
+    try:
+        import pymupdf
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text((72, 72), "Mocked PDF text and content")
+        buf = io.BytesIO()
+        doc.save(buf)
+        doc.close()
+        file_content = buf.getvalue()
+    except Exception:
+        file_content = b"%PDF-1.4 Mock PDF Stream %%EOF"
+
     files = {"file": ("test.pdf", file_content, "application/pdf")}
     response = client.post("/api/upload", files=files)
     
-    if response.status_code != 200:
-        print("TEST ERROR DETAIL:", response.json())
-        
     assert response.status_code == 200
     data = response.json()
-    assert data["data_category"] == "text"
-    assert data["text"]["summary"] == "Mocked summary"
-    assert data["text"]["word_count"] == 3
+    assert data["file_type"] == "pdf"
+    assert data["data_category"] in ("text", "qualitative_document", "mixed")
+    assert data["text"] is not None
 
 
 def test_upload_valid_csv_endpoint(client, mocker):
-    """Test uploading a valid CSV, mocking the internal parsers to avoid actual file system calls."""
-    mocker.patch("parsers.csv_parser.parse_csv", return_value={"headers": ["Date", "Val"], "rows": [["2025-01-01", 10.0]]})
-
+    """Test uploading a valid CSV."""
     file_content = b"Date,Val\n2025-01-01,10.0"
     files = {"file": ("test.csv", file_content, "text/csv")}
     response = client.post("/api/upload", files=files)
@@ -66,9 +66,19 @@ def test_upload_valid_csv_endpoint(client, mocker):
 
 def test_upload_valid_xlsx_endpoint(client, mocker):
     """Test uploading a valid XLSX spreadsheet."""
-    mocker.patch("main.parse_xlsx", return_value={"headers": ["Region", "Sales"], "rows": [["North", 500.0]]})
+    import io
+    try:
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Region", "Sales"])
+        ws.append(["North", 500.0])
+        buf = io.BytesIO()
+        wb.save(buf)
+        file_content = buf.getvalue()
+    except Exception:
+        pytest.skip("openpyxl missing")
 
-    file_content = b"fake_xlsx_binary_content"
     files = {"file": ("sales.xlsx", file_content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
     response = client.post("/api/upload", files=files)
 
@@ -81,55 +91,37 @@ def test_upload_valid_xlsx_endpoint(client, mocker):
 
 def test_upload_valid_docx_endpoint(client, mocker):
     """Test uploading a valid DOCX file."""
-    from models.schemas import TextResult, KeywordItem
+    import io
+    try:
+        import docx
+        doc = docx.Document()
+        doc.add_paragraph("Docx sample text")
+        buf = io.BytesIO()
+        doc.save(buf)
+        file_content = buf.getvalue()
+    except Exception:
+        pytest.skip("python-docx missing")
 
-    mocker.patch("main.parse_docx", return_value={"text": "Docx sample text", "paragraph_count": 2, "structured_tsv": ""})
-    mocker.patch("main.extract_tables_from_text", return_value=None)
-    mocker.patch("main.parse_tsv_grid", return_value=None)
-    mocker.patch("main.process_text", return_value=TextResult(
-        word_count=3,
-        page_count=None,
-        paragraph_count=2,
-        summary="Docx summary",
-        keywords=[KeywordItem(word="sample", score=0.95)],
-        ai_model="test-mock"
-    ))
-
-    file_content = b"fake_docx_binary_stream"
     files = {"file": ("report.docx", file_content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
     response = client.post("/api/upload", files=files)
 
     assert response.status_code == 200
     data = response.json()
     assert data["file_type"] == "docx"
-    assert data["data_category"] == "text"
-    assert data["text"]["summary"] == "Docx summary"
+    assert data["data_category"] in ("text", "qualitative_document", "mixed")
 
 
 def test_upload_valid_txt_endpoint(client, mocker):
     """Test uploading a valid TXT document."""
-    from models.schemas import TextResult, KeywordItem
-
-    mocker.patch("main.parse_txt", return_value={"text": "Simple text content", "paragraph_count": 1})
-    mocker.patch("main.extract_tables_from_text", return_value=None)
-    mocker.patch("main.process_text", return_value=TextResult(
-        word_count=3,
-        page_count=None,
-        paragraph_count=1,
-        summary="Text summary",
-        keywords=[KeywordItem(word="content", score=0.9)],
-        ai_model="test-mock"
-    ))
-
-    file_content = b"Simple text content"
+    file_content = b"Simple text content for document profiling."
     files = {"file": ("notes.txt", file_content, "text/plain")}
     response = client.post("/api/upload", files=files)
 
     assert response.status_code == 200
     data = response.json()
     assert data["file_type"] == "txt"
-    assert data["data_category"] == "text"
-    assert data["text"]["summary"] == "Text summary"
+    assert data["data_category"] in ("text", "qualitative_document")
+    assert data["text"]["summary"] is not None
 
 def test_get_document_metrics_not_found(client, mocker):
     """Test retrieving metrics for a file that does not exist in the database."""

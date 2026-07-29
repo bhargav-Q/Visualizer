@@ -39,7 +39,7 @@ graph TD
 | Model / Endpoint | Role & Purpose |
 |---|---|
 | `meta/llama-3.1-70b-instruct` | Generates executive document summaries, extracts keywords, and normalizes tabular data. |
-| `nvidia/nemotron-ocr-v2` | Base64 vision API for direct computer vision OCR on complex image payloads. |
+| `meta/llama-3.2-11b-vision-instruct` / `vision-parse` | Multi-modal vision engine & VLM parser for layout & table extraction on image and document payloads. |
 | `RapidOCR` + `parse_tsv_grid` | Zero-cost local ONNX engine and deterministic backstop parser guaranteeing 100% uptime if cloud APIs time out. |
 | `DuckDB` | Embedded OLAP database storing document metrics, key-value attributes, and cached analytics. |
 

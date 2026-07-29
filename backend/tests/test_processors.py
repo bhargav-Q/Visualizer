@@ -1,5 +1,6 @@
 import pytest
 import sys
+from io import BytesIO
 from unittest.mock import MagicMock
 
 # Import processors directly
@@ -124,16 +125,29 @@ def test_parse_tsv_grid_dynamic_n_columns():
     assert res["rows"][0][4] == 50.5  # Currency stripped to numeric
 
 
-def test_nemotron_ocr_v2_endpoint_mock(mocker):
-    """Test Nemotron OCR v2 API handler with mocked 200 response."""
-    from processors.ocr_processor import extract_tables_with_nemotron_ocr
+@pytest.mark.enable_vision_api
+def test_parse_pdf_with_vision(mocker):
+    """Test vision_parser module with mocked VisionParser VLM output."""
+    from engine.vision_client import disable_vision_api
+    disable_vision_api(0.0)
+    try:
+        from parsers.vision_parser import parse_pdf_with_vision
+        from fastapi import UploadFile
+        from unittest.mock import MagicMock
 
-    mock_post = mocker.patch("requests.post")
-    mock_post.return_value.status_code = 200
-    mock_post.return_value.json.return_value = {"detected_elements": ["Table 1"]}
+        mock_vp_module = MagicMock()
+        mocker.patch.dict("sys.modules", {"vision_parse": mock_vp_module, "vision_parse.llm": mock_vp_module})
+        mock_instance = mock_vp_module.VisionParser.return_value
+        mock_instance.convert_pdf.return_value = ["Page 1 markdown content", "Page 2 markdown content"]
 
-    res = extract_tables_with_nemotron_ocr(b"fake_image_bytes")
-    assert res == {"detected_elements": ["Table 1"]}
+        fake_file = UploadFile(filename="test_doc.pdf", file=BytesIO(b"%PDF-1.4 Fake PDF"))
+        res = parse_pdf_with_vision(fake_file)
+
+        assert res["page_count"] == 2
+        assert "Page 1 markdown content" in res["text"]
+        assert "Page 2 markdown content" in res["text"]
+    finally:
+        disable_vision_api(999999.0)
 
 
 def test_resource_manager_worker_pool():
@@ -159,56 +173,6 @@ def test_resource_manager_worker_pool():
     # Test global executor
     executor = get_global_executor()
     assert executor is not None
-
-
-def test_extract_page_with_nemotron_sectioned(mocker):
-    from processors.ocr_processor import extract_page_with_nemotron_sectioned
-    mock_page = MagicMock()
-    mock_page.rect = MagicMock(y0=0, y1=100, x0=0, x1=100)
-    mock_pix = MagicMock()
-    mock_pix.tobytes.return_value = b"somebytes"
-    mock_page.get_pixmap.return_value = mock_pix
-    
-    mock_extract = mocker.patch("processors.ocr_processor.extract_tables_with_nemotron_ocr")
-    mock_extract.return_value = {
-        "data": [{
-            "text_detections": [
-                {"text_prediction": {"text": "hello"}},
-                {"text_prediction": {"text": "world"}}
-            ]
-        }]
-    }
-    
-    res = extract_page_with_nemotron_sectioned(mock_page)
-    assert res == ["hello", "world"]
-
-
-def test_extract_page_with_nemotron_sectioned_fallback(mocker):
-    from processors.ocr_processor import extract_page_with_nemotron_sectioned
-    mock_page = MagicMock()
-    mock_page.rect = MagicMock(y0=0, y1=100, x0=0, x1=100)
-    mock_pix = MagicMock()
-    mock_pix.tobytes.return_value = b"somebytes"
-    mock_page.get_pixmap.return_value = mock_pix
-    
-    # Force the main call to fail
-    mock_extract = mocker.patch("processors.ocr_processor.extract_tables_with_nemotron_ocr")
-    mock_extract.return_value = None
-    
-    # Mock get_ocr_engine to return None (no local OCR available) to test falling back through to Vision LLM
-    mock_get_ocr = mocker.patch("parsers.pdf_parser.get_ocr_engine")
-    mock_get_ocr.return_value = None
-    
-    # Mock Vision LLM
-    mock_vision = mocker.patch("engine.vision_client.extract_analytics_with_vision")
-    mock_analytics = MagicMock()
-    mock_analytics.summary = "Summary text"
-    mock_analytics.metrics = [MagicMock(context_snippet="Metric snippet")]
-    mock_analytics.key_value_pairs = [MagicMock(context_snippet="KV snippet")]
-    mock_vision.return_value = mock_analytics
-    
-    res = extract_page_with_nemotron_sectioned(mock_page)
-    assert res == ["Summary text", "Metric snippet", "KV snippet"]
 
 
 
