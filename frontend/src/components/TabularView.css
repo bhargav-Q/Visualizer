@@ -1,14 +1,136 @@
+/* TabularView Layout */
 .tabular-view {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 20px;
 }
 
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 16px;
+/* ─── Worksheet Navigation Tabs ─── */
+.worksheet-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  box-shadow: var(--shadow-light);
+  overflow: hidden;
+}
+
+.worksheet-tabs-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding-right: 8px;
+  border-right: 2px solid var(--card-border);
+}
+
+.worksheet-tabs-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(106, 27, 154, 0.2) transparent;
+  padding: 2px 0;
+}
+
+.worksheet-tabs-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.worksheet-tabs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.worksheet-tabs-scroll::-webkit-scrollbar-thumb {
+  background: rgba(106, 27, 154, 0.2);
+  border-radius: 4px;
+}
+
+/* Individual Worksheet Tab */
+.worksheet-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--card-border);
+  background: var(--bg-main);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.worksheet-tab:hover {
+  background: rgba(106, 27, 154, 0.04);
+  border-color: rgba(106, 27, 154, 0.25);
   color: var(--text-primary);
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(106, 27, 154, 0.06);
+}
+
+.worksheet-tab.active {
+  background: linear-gradient(135deg, rgba(106, 27, 154, 0.08), rgba(156, 77, 204, 0.06));
+  border-color: var(--brand-purple);
+  color: var(--brand-purple);
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(106, 27, 154, 0.1), inset 0 0 0 1px rgba(106, 27, 154, 0.05);
+}
+
+.worksheet-tab-icon {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+.worksheet-tab.active .worksheet-tab-icon {
+  opacity: 1;
+  color: var(--brand-purple);
+}
+
+.worksheet-tab-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.worksheet-tab-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(106, 27, 154, 0.06);
+  color: var(--text-secondary);
+}
+
+.worksheet-tab.active .worksheet-tab-badge {
+  background: rgba(106, 27, 154, 0.12);
+  color: var(--brand-purple);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+  .worksheet-tabs-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .worksheet-tabs-label {
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+    padding-right: 0;
+    padding-bottom: 6px;
+    width: 100%;
+  }
+
+  .worksheet-tabs-scroll {
+    width: 100%;
+  }
 }
