@@ -15,41 +15,59 @@ api_key = os.getenv("NVIDIA_API_KEY")
 
 def parse_tsv_grid(raw_text: str) -> dict | None:
     """
-    Patch C: Deterministic TSV Table Parser.
-    Parses tab-separated text lines directly into a structured table object
-    without relying on LLM availability.
+    Patch C: Deterministic Multi-Column Table Parser.
+    Parses tab-separated, pipe-separated, or multi-space separated text lines
+    directly into a structured table object without relying on LLM availability.
     """
-    lines = [line.strip() for line in raw_text.split("\n") if "\t" in line]
-    if len(lines) < 2:
+    if not raw_text:
         return None
 
-    parsed_rows = []
-    for line in lines:
-        cells = [c.strip() for c in line.split("\t")]
-        # Convert numeric and currency strings to numbers where possible
-        clean_cells = []
-        for cell in cells:
-            if not cell or cell in ["--", "-", "null"]:
-                clean_cells.append(None)
-            else:
-                # Strip currency symbols and commas
-                clean_val = cell.replace("$", "").replace(",", "").strip()
-                try:
-                    if "." in clean_val:
-                        clean_cells.append(float(clean_val))
-                    else:
-                        clean_cells.append(int(clean_val))
-                except ValueError:
-                    clean_cells.append(cell)
-        parsed_rows.append(clean_cells)
+    import re
+    lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+    candidate_rows = []
 
-    if len(parsed_rows) >= 2 and len(parsed_rows[0]) >= 2:
-        headers = [str(h) if h is not None else f"Column_{idx+1}" for idx, h in enumerate(parsed_rows[0])]
-        data_rows = parsed_rows[1:]
-        return {
-            "headers": headers,
-            "rows": data_rows
-        }
+    for line in lines:
+        if "\t" in line:
+            cells = [c.strip() for c in line.split("\t") if c.strip() != ""]
+        elif "|" in line:
+            cells = [c.strip() for c in line.split("|") if c.strip() != ""]
+        else:
+            cells = [c.strip() for c in re.split(r"\s{2,}", line) if c.strip() != ""]
+
+        if len(cells) >= 2:
+            clean_cells = []
+            for cell in cells:
+                if not cell or cell in ["--", "-", "null"]:
+                    clean_cells.append(None)
+                else:
+                    clean_val = cell.replace("$", "").replace(",", "").strip()
+                    try:
+                        if "." in clean_val:
+                            clean_cells.append(float(clean_val))
+                        else:
+                            clean_cells.append(int(clean_val))
+                    except ValueError:
+                        clean_cells.append(cell)
+            candidate_rows.append(clean_cells)
+
+    if len(candidate_rows) >= 2:
+        col_counts = [len(r) for r in candidate_rows]
+        dominant_cols = max(set(col_counts), key=col_counts.count)
+        if dominant_cols >= 2:
+            matching_rows = [r for r in candidate_rows if len(r) == dominant_cols]
+            if len(matching_rows) >= 2:
+                # Check if column 0 is predominantly question/bullet index markers (e.g. (a), (b), (c), 1., 2.)
+                col0_vals = [str(r[0]).strip().lower() for r in matching_rows if r]
+                question_markers = sum(1 for v in col0_vals if re.match(r"^[\(\[\{]?[a-z0-9]{1,3}[\)\.\}\]]?$", v))
+                if question_markers / len(col0_vals) > 0.35:
+                    return None
+
+                headers = [str(h) if h is not None else f"Column_{idx+1}" for idx, h in enumerate(matching_rows[0])]
+                data_rows = matching_rows[1:]
+                return {
+                    "headers": headers,
+                    "rows": data_rows
+                }
     return None
 
 def extract_tables_from_text(raw_text: str) -> dict | None:
@@ -179,51 +197,6 @@ def extract_tables_from_pdf(file_bytes: bytes) -> dict | None:
         logger.warning(f"Error extracting PDF text for table extraction: {e}")
         return None
 
-def extract_tables_with_nemotron_ocr(image_bytes: bytes) -> dict | None:
-    """
-    Invokes NVIDIA Nemotron OCR v2 endpoint (https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2)
-    with base64 encoded image payload as per NVIDIA specifications.
-    """
-    if not api_key or not image_bytes:
-        return None
-
-    import base64
-    import requests
-
-    invoke_url = os.getenv("NEMOTRON_OCR_URL", "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2")
-    image_b64 = base64.b64encode(image_bytes).decode()
-
-    if len(image_b64) > 180000:
-        logger.warning("Image payload exceeds 180,000 base64 characters limit for Nemotron OCR v2 direct payload — rejecting to avoid silent API failure")
-        return None
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/json"
-    }
-
-    payload = {
-        "input": [
-            {
-                "type": "image_url",
-                "url": f"data:image/png;base64,{image_b64}"
-            }
-        ]
-    }
-
-    try:
-        response = requests.post(invoke_url, headers=headers, json=payload, timeout=15.0)
-        if response.status_code == 200:
-            res = response.json()
-            logger.info("Successfully received Nemotron OCR v2 API response")
-            return res
-        else:
-            logger.warning(f"Nemotron OCR v2 returned status {response.status_code}: {response.text}")
-    except Exception as e:
-        logger.warning(f"Nemotron OCR v2 API error: {e}")
-
-    return None
-
 async def extract_tables_from_text_async(raw_text: str) -> dict | None:
     """Async wrapper for extract_tables_from_text enforcing 15-second non-blocking execution."""
     import asyncio
@@ -232,129 +205,3 @@ async def extract_tables_from_text_async(raw_text: str) -> dict | None:
     except Exception as exc:
         logger.warning(f"Async table extraction call failed: {exc}")
         return None
-
-async def extract_tables_with_nemotron_ocr_async(image_bytes: bytes) -> dict | None:
-    """Async wrapper for extract_tables_with_nemotron_ocr enforcing 15-second non-blocking execution."""
-    import asyncio
-    try:
-        return await asyncio.to_thread(extract_tables_with_nemotron_ocr, image_bytes)
-    except Exception as exc:
-        logger.warning(f"Async Nemotron OCR call failed: {exc}")
-        return None
-
-
-
-def extract_page_with_nemotron_sectioned(page, dpi=150, max_b64_chars=170000):
-    """
-    Problem 2 Fix: Auto page-section splitting for Nemotron OCR v2.
-    Renders a PyMuPDF page in vertical sections that each fit under the
-    180K base64 character limit, sends each section to Nemotron OCR v2,
-    and merges all text_detections into one combined result.
-    If the Nemotron Cloud API returns an error or is unavailable, falls back gracefully.
-
-    Args:
-        page: A PyMuPDF page object.
-        dpi: Render resolution (default 150 for crisp text).
-        max_b64_chars: Maximum base64 characters per section (default 170K with 10K safety margin).
-
-    Returns:
-        List of raw text strings extracted from all sections, or fallback results on failure.
-    """
-    import base64
-    import pymupdf
-
-    rect = page.rect
-    page_height = rect.y1 - rect.y0
-
-    # Start with full page to check if it fits
-    pix_full = page.get_pixmap(dpi=dpi)
-    full_b64_len = len(base64.b64encode(pix_full.tobytes("png")))
-
-    result = None
-    has_failed = False
-
-    if full_b64_len <= max_b64_chars:
-        # Full page fits — send as one request
-        try:
-            result = extract_tables_with_nemotron_ocr(pix_full.tobytes("png"))
-            if not result or not result.get("data"):
-                has_failed = True
-        except Exception as err:
-            logger.warning(f"Nemotron OCR direct request error: {err}")
-            has_failed = True
-    else:
-        # Calculate how many vertical sections we need
-        ratio = full_b64_len / max_b64_chars
-        num_sections = max(2, int(ratio) + 1)
-        section_height = page_height / num_sections
-
-        logger.info(f"Page too large ({full_b64_len:,} b64 chars). Splitting into {num_sections} vertical sections.")
-
-        all_texts = []
-        for i in range(num_sections):
-            y_start = rect.y0 + (i * section_height)
-            y_end = rect.y0 + ((i + 1) * section_height)
-            clip = pymupdf.Rect(rect.x0, y_start, rect.x1, y_end)
-
-            pix_section = page.get_pixmap(dpi=dpi, clip=clip)
-            section_bytes = pix_section.tobytes("png")
-
-            try:
-                sec_res = extract_tables_with_nemotron_ocr(section_bytes)
-                if sec_res and sec_res.get("data"):
-                    detections = sec_res["data"][0].get("text_detections", [])
-                    section_texts = [d["text_prediction"]["text"] for d in detections]
-                    all_texts.extend(section_texts)
-                else:
-                    has_failed = True
-                    break
-            except Exception as err:
-                logger.warning(f"Nemotron OCR section request error at section {i+1}: {err}")
-                has_failed = True
-                break
-        
-        if not has_failed:
-            return all_texts
-
-    # ⚠️ Automatic Fallback Logic: Triggered if Cloud Nemotron API is down, rate-limited, or unauthorized (404/403/503)
-    if has_failed or not result:
-        logger.warning("[WARNING] Cloud Nemotron OCR API unavailable. Falling back to local RapidOCR / Vision LLM.")
-        
-        # Fallback Option A: Local RapidOCR
-        try:
-            from parsers.pdf_parser import get_ocr_engine
-            ocr_engine = get_ocr_engine()
-            if ocr_engine:
-                from parsers.spatial_grid import run_ocr_with_orientation_check
-                logger.info("Executing Fallback A: local RapidOCR engine...")
-                ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=dpi)
-                if ocr_results:
-                    return [str(item[1]).strip() for item in ocr_results if item[1]]
-        except Exception as ocr_err:
-            logger.warning(f"Local RapidOCR fallback failed: {ocr_err}")
-
-        # Fallback Option B: Llama-3.2-Vision (NVIDIA API)
-        try:
-            from engine.vision_client import extract_analytics_with_vision
-            logger.info("Executing Fallback B: meta/llama-3.2-11b-vision-instruct...")
-            pix = page.get_pixmap(dpi=dpi)
-            analytics = extract_analytics_with_vision(pix.tobytes("png"))
-            if analytics:
-                texts = []
-                if analytics.summary:
-                    texts.append(analytics.summary)
-                for m in analytics.metrics:
-                    if m.context_snippet:
-                        texts.append(m.context_snippet)
-                for kv in analytics.key_value_pairs:
-                    if kv.context_snippet:
-                        texts.append(kv.context_snippet)
-                return texts
-        except Exception as vision_err:
-            logger.warning(f"Vision LLM fallback failed: {vision_err}")
-
-        return []
-
-    # Successful direct Nemotron OCR result parsing
-    detections = result["data"][0].get("text_detections", [])
-    return [d["text_prediction"]["text"] for d in detections]
