@@ -220,11 +220,14 @@ def generate_local_fallback_text_result(raw_text: str, page_count: int = None, p
     )
 
 def process_text(raw_text: str, page_count: int = None, paragraph_count: int = None) -> TextResult:
-    word_count = len(raw_text.split()) if raw_text else 0
+    word_count = len(raw_text.split())
+    api_key = os.getenv("NVIDIA_API_KEY")
+    base_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
     model_name = os.getenv("TEXT_AI_MODEL", "meta/llama-3.1-70b-instruct")
 
     from engine.vision_client import is_vision_api_disabled, disable_vision_api
     
+    # Heuristic Fallback if API Key missing or Circuit Breaker Active
     if not api_key or is_vision_api_disabled():
         return generate_local_fallback_text_result(raw_text, page_count, paragraph_count, model_name)
 
