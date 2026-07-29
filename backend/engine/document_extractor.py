@@ -627,3 +627,120 @@ async def process_unstructured_document_async(file: UploadFile) -> Dict[str, Any
         "records_inserted": inserted_records
     }
 
+def find_bbox_and_page(blocks_by_page: Dict[int, List[Dict[str, Any]]], snippet: str):
+    """
+    Searches across all page blocks for a snippet match, returning [x0, y0, x1, y1] and page number.
+    """
+    if not snippet or not blocks_by_page:
+        return None, 1
+    for page_num, blocks in blocks_by_page.items():
+        if isinstance(blocks, dict) and "blocks" in blocks:
+            blocks_list = blocks["blocks"]
+        elif isinstance(blocks, list):
+            blocks_list = blocks
+        else:
+            blocks_list = []
+        
+        bbox = match_text_to_bbox(blocks_list, snippet)
+        if bbox:
+            return bbox, page_num
+    return None, 1
+
+def merge_native_and_vision_data(native_res: dict, vision_res: Any, filename: str) -> dict:
+    """
+    Combines PyMuPDF exact local bounding boxes & spatial blocks with Vision/LLM qualitative analysis.
+    If Vision processing failed or timed out, gracefully returns local parser result with vision_fallback: true.
+    """
+    blocks_by_page = native_res.get("blocks_by_page", {})
+    raw_text = native_res.get("text", "")
+
+    # Fallback if Vision API failed or hit exceptions
+    if not vision_res or isinstance(vision_res, Exception):
+        logger.warning(f"Vision API fallback triggered for '{filename}'. Exception/Missing: {vision_res}")
+        fallback_analytics = create_heuristic_fallback_analytics(filename, raw_text)
+        return {
+            "analytics": fallback_analytics.model_dump() if hasattr(fallback_analytics, "model_dump") else fallback_analytics,
+            "parsed_data": native_res,
+            "vision_fallback": True
+        }
+
+    analytics_data = vision_res.get("analytics") if isinstance(vision_res, dict) else vision_res
+    if not analytics_data:
+        fallback_analytics = create_heuristic_fallback_analytics(filename, raw_text)
+        return {
+            "analytics": fallback_analytics.model_dump() if hasattr(fallback_analytics, "model_dump") else fallback_analytics,
+            "parsed_data": native_res,
+            "vision_fallback": True
+        }
+
+    # Helper function for dynamic attribute access/mutation
+    def _get_attr(obj, attr):
+        return obj.get(attr) if isinstance(obj, dict) else getattr(obj, attr, None)
+
+    def _set_attr(obj, attr, val):
+        if isinstance(obj, dict):
+            obj[attr] = val
+        else:
+            setattr(obj, attr, val)
+
+    # Enrich qualitative sections with bounding boxes and page numbers
+    qual_sections = _get_attr(analytics_data, "qualitative_sections") or []
+    for section in qual_sections:
+        title = _get_attr(section, "section_title") or _get_attr(section, "title")
+        content = _get_attr(section, "content") or _get_attr(section, "key_takeaway")
+        existing_bbox = _get_attr(section, "bbox")
+        
+        if not existing_bbox and (title or content):
+            bbox, pnum = find_bbox_and_page(blocks_by_page, title or content)
+            if bbox:
+                _set_attr(section, "bbox", bbox)
+                _set_attr(section, "page_number", pnum)
+
+    # Enrich metrics with bounding boxes and page numbers
+    metrics = _get_attr(analytics_data, "metrics") or []
+    for m in metrics:
+        context = _get_attr(m, "context_snippet") or _get_attr(m, "category")
+        existing_bbox = _get_attr(m, "bbox")
+        if not existing_bbox and context:
+            bbox, pnum = find_bbox_and_page(blocks_by_page, context)
+            if bbox:
+                _set_attr(m, "bbox", bbox)
+                _set_attr(m, "page_number", pnum)
+
+    return {
+        "analytics": analytics_data,
+        "parsed_data": native_res,
+        "vision_fallback": False
+    }
+
+def merge_text_and_llm_data(local_res: dict, llm_res: Any, filename: str) -> dict:
+    """
+    Combines local text/Word doc parsing results with LLM qualitative analysis.
+    Gracefully falls back to local heuristic analytics if LLM task raises exceptions.
+    """
+    raw_text = local_res.get("text", "")
+    
+    if not llm_res or isinstance(llm_res, Exception):
+        logger.warning(f"LLM text analysis fallback triggered for '{filename}'. Exception/Missing: {llm_res}")
+        fallback_analytics = create_heuristic_fallback_analytics(filename, raw_text)
+        return {
+            "analytics": fallback_analytics.model_dump() if hasattr(fallback_analytics, "model_dump") else fallback_analytics,
+            "parsed_data": local_res,
+            "vision_fallback": True
+        }
+
+    analytics_data = llm_res.get("analytics") if isinstance(llm_res, dict) else llm_res
+    if not analytics_data:
+        fallback_analytics = create_heuristic_fallback_analytics(filename, raw_text)
+        return {
+            "analytics": fallback_analytics.model_dump() if hasattr(fallback_analytics, "model_dump") else fallback_analytics,
+            "parsed_data": local_res,
+            "vision_fallback": True
+        }
+
+    return {
+        "analytics": analytics_data,
+        "parsed_data": local_res,
+        "vision_fallback": False
+    }
+

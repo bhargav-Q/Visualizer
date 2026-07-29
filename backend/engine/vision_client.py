@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
 
-VISION_MODEL_NAME = os.getenv("NEMOTRON_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
+VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "meta/llama-3.2-11b-vision-instruct")
 
 # Shared HTTPX resilient timeout configuration
 TIMEOUT_CONFIG = httpx.Timeout(VISION_API_TIMEOUT_SECONDS, connect=5.0)
