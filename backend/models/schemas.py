@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 
 class ColumnInfo(BaseModel):
@@ -27,6 +27,17 @@ class ChartData(BaseModel):
     y_key: str
     data: List[Dict[str, Any]]
 
+class SheetData(BaseModel):
+    """Per-worksheet analysis data for multi-sheet Excel workbooks."""
+    sheet_name: str
+    columns: List[ColumnInfo] = Field(default_factory=list)
+    preview_rows: List[List[Any]] = Field(default_factory=list)
+    row_count: int = 0
+    col_count: int = 0
+    numeric_summary: Dict[str, NumericSummary] = Field(default_factory=dict)
+    categorical_summary: Dict[str, CategoricalSummary] = Field(default_factory=dict)
+    charts: List[ChartData] = Field(default_factory=list)
+
 class TabularResult(BaseModel):
     columns: List[ColumnInfo]
     preview_rows: List[List[Any]]
@@ -35,6 +46,7 @@ class TabularResult(BaseModel):
     numeric_summary: Dict[str, NumericSummary]
     categorical_summary: Dict[str, CategoricalSummary]
     charts: List[ChartData]
+    sheets: List[SheetData] = Field(default_factory=list)
 
 class KeywordItem(BaseModel):
     word: str
