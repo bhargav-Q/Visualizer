@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import TabularView from './TabularView';
 import TextView from './TextView';
-import TraceabilityViewer from './TraceabilityViewer';
+// import TraceabilityViewer from './TraceabilityViewer';
 import StatsCards from './StatsCards';
 import ChartPanel from './ChartPanel';
 import DataTablePreview from './DataTablePreview';
-import { ArrowLeft, Database, FileText, BarChart3, Search, ArrowUpDown, Download, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Database, FileText, Search, Download, Copy, Check, ArrowUpDown } from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = ({ data, onReset }) => {
@@ -42,19 +42,17 @@ const Dashboard = ({ data, onReset }) => {
   if (!data) return null;
 
   const isTabular = data.data_category === 'tabular';
-  const hasTraceability = data.file_type === 'pdf' && data.analytics;
+  const hasTraceability = data.file_type === 'pdf' || (data.file_name && data.file_name.toLowerCase().endsWith('.pdf'));
 
-  // Determine valid tab based on data category and content
   const getValidTab = () => {
     if (isTabular) {
       return (activeTab === 'overview' || activeTab === 'preview') ? activeTab : 'overview';
     }
-    // Auto-triage: Default to 'summary' tab for qualitative documents (syllabi, brochures, policies with zero metrics)
     const isQualitative = data.data_category === 'qualitative_document' || 
       (data.analytics && (!data.analytics.metrics || data.analytics.metrics.length === 0) && (!data.analytics.tables || data.analytics.tables.length === 0));
 
     const validTabs = ['overview', 'summary', 'keywords'];
-    if (data.analytics && data.analytics.tables && data.analytics.tables.length > 0) {
+    if ((data.analytics && data.analytics.tables && data.analytics.tables.length > 0) || data.tabular) {
       validTabs.push('tables');
     }
     if (hasTraceability) {
@@ -119,22 +117,35 @@ const Dashboard = ({ data, onReset }) => {
   };
 
   // KPI cards metrics structure
-  const kpiMetrics = filteredMetrics.map(m => ({
-    title: m.category,
-    value: formatMetricValue(m.metric_value, m.unit)
-  }));
+  const kpiMetrics = React.useMemo(() => {
+    if (data.kpis && data.kpis.length > 0) {
+      return data.kpis.map(k => ({ title: k.label, value: k.value }));
+    }
+    return filteredMetrics.map(m => ({
+      title: m.category,
+      value: formatMetricValue(m.metric_value, m.unit)
+    }));
+  }, [data.kpis, filteredMetrics]);
 
   // Recharts Metrics comparison chart structure
-  const metricsCharts = filteredMetrics.length > 0 ? [{
-    title: "Metrics Comparison",
-    type: "bar",
-    x_key: "category",
-    y_key: "value",
-    data: filteredMetrics.map(m => ({
-      category: m.category,
-      value: m.metric_value
-    }))
-  }] : [];
+  const metricsCharts = React.useMemo(() => {
+    if (data.charts && data.charts.length > 0) {
+      return data.charts;
+    }
+    if (filteredMetrics.length > 0) {
+      return [{
+        title: "Metrics Comparison",
+        type: "bar",
+        x_key: "category",
+        y_key: "value",
+        data: filteredMetrics.map(m => ({
+          category: m.category,
+          value: m.metric_value
+        }))
+      }];
+    }
+    return [];
+  }, [data.charts, filteredMetrics]);
 
   return (
     <div className="dashboard-container animate-fade-in">
@@ -164,7 +175,7 @@ const Dashboard = ({ data, onReset }) => {
           </span>
           <span className="file-name">{data.file_name}</span>
           <span className={`badge-type ${isTabular ? 'badge-tabular' : 'badge-text'}`}>
-            {data.file_type.toUpperCase()}
+            {(data.file_type || data.source_type || 'doc').toUpperCase()}
           </span>
           {!isTabular && data.analytics?.tables && data.analytics.tables.length > 0 && (
             <span className="badge-type badge-mixed">
@@ -179,26 +190,9 @@ const Dashboard = ({ data, onReset }) => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Dynamic Content Navigation Tabs Based On Dataset Classification */}
       <div className="content-type-tabs">
-        {isTabular && (
-          <>
-            <button 
-              className={`ct-tab ${currentTab === 'overview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('overview')}
-            >
-              Dashboard Overview
-            </button>
-            <button 
-              className={`ct-tab ${currentTab === 'preview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('preview')}
-            >
-              Raw Data Preview
-            </button>
-          </>
-        )}
-
-        {!isTabular && (
+        {isTabular ? (
           <>
             <button 
               className={`ct-tab ${currentTab === 'overview' ? 'active' : ''}`}
@@ -206,14 +200,21 @@ const Dashboard = ({ data, onReset }) => {
             >
               Overview Analytics
             </button>
-            {data.analytics && data.analytics.tables && data.analytics.tables.length > 0 && (
-              <button 
-                className={`ct-tab ${currentTab === 'tables' ? 'active' : ''}`}
-                onClick={() => setActiveTab('tables')}
-              >
-                Data Tables
-              </button>
-            )}
+            <button 
+              className={`ct-tab ${currentTab === 'preview' ? 'active' : ''}`}
+              onClick={() => setActiveTab('preview')}
+            >
+              Data Overview & Charts
+            </button>
+          </>
+        ) : (
+          <>
+            <button 
+              className={`ct-tab ${currentTab === 'overview' ? 'active' : ''}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              Overview Analytics
+            </button>
             <button 
               className={`ct-tab ${currentTab === 'summary' ? 'active' : ''}`}
               onClick={() => setActiveTab('summary')}
@@ -226,14 +227,22 @@ const Dashboard = ({ data, onReset }) => {
             >
               Keyword Analysis
             </button>
-            {hasTraceability && (
+            {((data.analytics?.tables && data.analytics.tables.length > 0) || data.tabular) && (
+              <button 
+                className={`ct-tab ${currentTab === 'tables' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tables')}
+              >
+                Data Tables
+              </button>
+            )}
+            {/* {hasTraceability && (
               <button 
                 className={`ct-tab ${currentTab === 'traceability' ? 'active' : ''}`}
                 onClick={() => setActiveTab('traceability')}
               >
                 Traceability View
               </button>
-            )}
+            )} */}
           </>
         )}
       </div>
@@ -254,12 +263,12 @@ const Dashboard = ({ data, onReset }) => {
 
       <div className="dashboard-content">
         {/* Spreadsheets Ingestion View */}
-        {isTabular && data.tabular && (
+        {(currentTab === 'overview' || currentTab === 'preview') && data.tabular && (
           <TabularView tabularData={data.tabular} activeSubTab={currentTab} />
         )}
 
-        {/* Overview Analytics for Documents (KPI cards, charts, attributes grid) */}
-        {!isTabular && currentTab === 'overview' && data.analytics && (
+        {/* Overview Analytics for PDF / Text Documents */}
+        {currentTab === 'overview' && !data.tabular && (
           <div className="document-analytics-overview animate-fade-in">
             {/* KPI Cards Section or Qualitative Document Outline */}
             {kpiMetrics.length > 0 ? (
@@ -341,50 +350,78 @@ const Dashboard = ({ data, onReset }) => {
           </div>
         )}
 
-        {/* Extracted Tables for Documents */}
-        {!isTabular && currentTab === 'tables' && data.analytics?.tables && data.analytics.tables.length > 0 && (
+        {/* Extracted Tables View */}
+        {currentTab === 'tables' && (
           <div className="extracted-tables-section animate-fade-in">
-            {data.analytics.tables.length > 1 && (
-              <div className="table-selector-wrapper glass-panel">
-                <label htmlFor="table-select" className="table-select-label">Select Table View: </label>
-                <select 
-                  id="table-select" 
-                  value={selectedTableIndex} 
-                  onChange={(e) => setSelectedTableIndex(parseInt(e.target.value))}
-                  className="table-selector-dropdown"
-                >
-                  {data.analytics.tables.map((t, idx) => (
-                    <option key={idx} value={idx}>
-                      {t.table_title || `Table ${idx + 1}`}
-                    </option>
-                  ))}
-                </select>
+            {data.analytics?.tables && data.analytics.tables.length > 0 ? (
+              <>
+                {data.analytics.tables.length > 1 && (
+                  <div className="table-selector-wrapper glass-panel">
+                    <label htmlFor="table-select" className="table-select-label">Select Table View: </label>
+                    <select 
+                      id="table-select" 
+                      value={selectedTableIndex} 
+                      onChange={(e) => setSelectedTableIndex(parseInt(e.target.value))}
+                      className="table-selector-dropdown"
+                    >
+                      {data.analytics.tables.map((t, idx) => (
+                        <option key={idx} value={idx}>
+                          {t.table_title || `Table ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
+                {(() => {
+                  const tbl = data.analytics.tables[selectedTableIndex] || data.analytics.tables[0];
+                  const cols = tbl.headers.map(h => ({ name: h, dtype: 'string' }));
+                  return (
+                    <DataTablePreview 
+                      columns={cols} 
+                      previewRows={tbl.rows} 
+                      totalRowCount={tbl.rows.length} 
+                    />
+                  );
+                })()}
+              </>
+            ) : data.tabular ? (
+              <DataTablePreview 
+                columns={data.tabular.columns} 
+                previewRows={data.tabular.preview_rows} 
+                totalRowCount={data.tabular.row_count} 
+              />
+            ) : (
+              <div className="empty-state-card glass-panel" style={{ padding: '20px', textAlign: 'center' }}>
+                <p>No structured data tables were detected in this document.</p>
               </div>
             )}
-            
-            {(() => {
-              const tbl = data.analytics.tables[selectedTableIndex] || data.analytics.tables[0];
-              const cols = tbl.headers.map(h => ({ name: h, dtype: 'string' }));
-              return (
-                <DataTablePreview 
-                  columns={cols} 
-                  previewRows={tbl.rows} 
-                  totalRowCount={tbl.rows.length} 
-                />
-              );
-            })()}
           </div>
         )}
 
-        {/* Text summaries and keywords cloud */}
-        {!isTabular && data.text && (currentTab === 'summary' || currentTab === 'keywords') && (
-          <TextView textData={data.text} activeSubTab={currentTab} processingTime={data.processing_time} />
+        {/* Text Summaries and Keywords Cloud */}
+        {(currentTab === 'summary' || currentTab === 'keywords') && (
+          <TextView 
+            textData={data.text || { 
+              summary: data.executive_summary || "Executive summary generated successfully.",
+              kpis: data.kpis || [],
+              keywords: data.keywords || (data.text && data.text.keywords) || [],
+              word_count: data.raw_markdown ? data.raw_markdown.split(/\s+/).length : 100,
+              page_count: data.page_count || 1,
+              paragraph_count: data.raw_markdown ? data.raw_markdown.split('\n\n').length : 1
+            }} 
+            activeSubTab={currentTab} 
+            processingTime={data.processing_time}
+            rawMarkdown={data.raw_markdown}
+            fileName={data.file_name}
+          />
         )}
 
-        {/* Bounding box traceback canvas overlay */}
-        {!isTabular && currentTab === 'traceability' && hasTraceability && (
+        {/* Spatial Traceability Canvas (Commented out for future work)
+        {currentTab === 'traceability' && (
           <TraceabilityViewer fileName={data.file_name} initialAnalytics={data.analytics} />
         )}
+        */}
       </div>
     </div>
   );

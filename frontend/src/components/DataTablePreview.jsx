@@ -10,7 +10,22 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
   const [sortColIndex, setSortColIndex] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
 
-  if (!columns || !previewRows || previewRows.length === 0) {
+  const effectiveRows = previewRows || [];
+
+  const effectiveColumns = useMemo(() => {
+    if (columns && columns.length > 0) {
+      return columns.map(c => typeof c === 'string' ? { name: c, dtype: 'string' } : (c.name ? c : { name: String(c), dtype: 'string' }));
+    }
+    if (effectiveRows.length > 0) {
+      const firstRow = effectiveRows[0];
+      if (typeof firstRow === 'object' && !Array.isArray(firstRow)) {
+        return Object.keys(firstRow).map(k => ({ name: k, dtype: 'string' }));
+      }
+    }
+    return [];
+  }, [columns, effectiveRows]);
+
+  if (!effectiveRows || effectiveRows.length === 0 || effectiveColumns.length === 0) {
     return <div className="no-data">No preview rows available.</div>;
   }
 
@@ -58,7 +73,11 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
   };
 
   return (
-    <div className="table-preview-container glass-panel">
+    <div 
+      className="table-preview-container glass-panel"
+      role="region"
+      aria-label="Extracted Tabular Data Preview"
+    >
       <div className="table-header">
         <div className="table-title-wrapper">
           <Table size={20} color="var(--brand-purple)" />
@@ -67,10 +86,10 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
       </div>
 
       <div className="table-wrapper">
-        <table className="data-table">
+        <table className="data-table" role="grid" aria-label="Extracted Data Table">
           <thead>
-            <tr>
-              {columns.map((col, idx) => (
+            <tr role="row">
+              {effectiveColumns.map((col, idx) => (
                 <th 
                   key={idx} 
                   onClick={() => handleHeaderClick(idx)}
@@ -89,17 +108,24 @@ const DataTablePreview = ({ columns, previewRows, totalRowCount }) => {
           <tbody>
             {paginatedRows.map((row, rowIdx) => (
               <tr key={rowIdx}>
-                {Array.isArray(row) ? row.map((cell, cellIdx) => {
-                  let displayVal = cell;
-                  if (cell === null || cell === undefined) {
-                    displayVal = <span className="null-val">NaN</span>;
-                  } else if (typeof cell === 'number') {
-                    displayVal = cell.toLocaleString(undefined, { maximumFractionDigits: 2 });
-                  } else if (typeof cell === 'boolean') {
-                    displayVal = cell ? 'True' : 'False';
-                  }
-                  return <td key={cellIdx}>{displayVal}</td>;
-                }) : <td>{String(row)}</td>}
+                {(() => {
+                  const cells = Array.isArray(row) 
+                    ? row 
+                    : (typeof row === 'object' && row !== null 
+                        ? effectiveColumns.map(c => row[c.name] ?? row[c.key])
+                        : [row]);
+                  return cells.map((cell, cellIdx) => {
+                    let displayVal = cell;
+                    if (cell === null || cell === undefined) {
+                      displayVal = <span className="null-val">NaN</span>;
+                    } else if (typeof cell === 'number') {
+                      displayVal = cell.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                    } else if (typeof cell === 'boolean') {
+                      displayVal = cell ? 'True' : 'False';
+                    }
+                    return <td key={cellIdx}>{displayVal}</td>;
+                  });
+                })()}
               </tr>
             ))}
           </tbody>

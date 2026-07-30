@@ -1,5 +1,6 @@
 import React from 'react';
-import { Activity, Loader2, AlertCircle, Sun, Moon, BarChart2, FileText, Image, Layers } from 'lucide-react';
+import { Activity, Sun, Moon, BarChart2, FileText } from 'lucide-react';
+// import { Loader2, AlertCircle, Image, Layers } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from './api/config';
 import { ENDPOINTS } from './api/endpoints';

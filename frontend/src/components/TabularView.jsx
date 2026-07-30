@@ -14,40 +14,44 @@ const TabularView = ({ tabularData, activeSubTab }) => {
   // Determine the active data source — per-sheet or top-level
   const getActiveData = () => {
     if (hasMultipleSheets) {
-      const sheet = tabularData.sheets[activeSheetIndex];
+      const safeIndex = Math.min(activeSheetIndex, (tabularData.sheets?.length || 1) - 1);
+      const sheet = tabularData.sheets[safeIndex] || {};
       return {
-        row_count: sheet.row_count || 0,
-        col_count: sheet.col_count || 0,
-        numeric_summary: sheet.numeric_summary || {},
-        categorical_summary: sheet.categorical_summary || {},
-        columns: sheet.columns || [],
-        preview_rows: sheet.preview_rows || [],
-        charts: sheet.charts || [],
-        sheet_name: sheet.sheet_name
+        row_count: sheet.row_count ?? tabularData.row_count ?? 0,
+        col_count: sheet.col_count ?? (sheet.columns ? sheet.columns.length : tabularData.col_count ?? 0),
+        columns: sheet.columns || tabularData.columns || [],
+        preview_rows: sheet.preview_rows || sheet.data_preview || tabularData.preview_rows || tabularData.data_preview || [],
+        charts: (sheet.charts && sheet.charts.length > 0) ? sheet.charts : (tabularData.charts || []),
+        kpis: sheet.kpis || tabularData.kpis || [],
+        sheet_name: sheet.sheet_name || null
       };
     }
     return {
-      row_count: tabularData.row_count || 0,
-      col_count: tabularData.col_count || 0,
-      numeric_summary: tabularData.numeric_summary || {},
-      categorical_summary: tabularData.categorical_summary || {},
+      row_count: tabularData.row_count || tabularData.total_rows || 0,
+      col_count: tabularData.col_count || tabularData.total_columns || (tabularData.columns ? tabularData.columns.length : 0),
       columns: tabularData.columns || [],
-      preview_rows: tabularData.preview_rows || [],
+      preview_rows: tabularData.preview_rows || tabularData.data_preview || [],
       charts: tabularData.charts || [],
+      kpis: tabularData.kpis || [],
       sheet_name: null
     };
   };
 
   const activeData = getActiveData();
 
-  const metrics = [
-    { title: "Total Rows", value: activeData.row_count?.toLocaleString() || 0 },
-    { title: "Total Columns", value: activeData.col_count },
-    { title: "Numeric Columns", value: Object.keys(activeData.numeric_summary || {}).length }
-  ];
+  const metrics = (activeData.kpis && activeData.kpis.length > 0)
+    ? activeData.kpis.map(k => ({ title: k.label, value: k.value }))
+    : [
+        { title: "Total Rows", value: activeData.row_count ? activeData.row_count.toLocaleString() : "0" },
+        { title: "Total Columns", value: activeData.col_count || (activeData.columns ? activeData.columns.length : 0) },
+        { title: "Numeric Columns", value: activeData.columns ? activeData.columns.filter(c => {
+            const dt = typeof c === 'object' ? (c.dtype || '') : '';
+            return dt.includes('int') || dt.includes('float') || dt.includes('number');
+          }).length : 0 }
+      ];
 
   // Add sheet count metric when multi-sheet
-  if (hasMultipleSheets) {
+  if (hasMultipleSheets && !metrics.some(m => m.title === "Worksheets")) {
     metrics.push({ title: "Worksheets", value: tabularData.sheets.length });
   }
 
@@ -85,7 +89,7 @@ const TabularView = ({ tabularData, activeSubTab }) => {
         <DataTablePreview 
           columns={activeData.columns} 
           previewRows={activeData.preview_rows} 
-          totalRowCount={activeData.row_count} 
+          totalRowCount={activeData.row_count || activeData.preview_rows.length} 
         />
       )}
     </div>

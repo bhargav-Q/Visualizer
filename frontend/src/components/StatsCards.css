@@ -1,41 +1,67 @@
+/* KPI Stat Cards Grid */
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .metric-card {
-  padding: 24px;
+  position: relative;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 14px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-light);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.04);
 }
 
 .metric-card:hover {
-  border-color: rgba(106, 27, 154, 0.25);
-  box-shadow: var(--card-shadow-hover);
-  transform: translateY(-3px);
+  transform: translateY(-2px);
+  border-color: #6366f1;
+  box-shadow: 0 8px 24px -6px rgba(99, 102, 241, 0.12);
+}
+
+.metric-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .metric-title {
-  font-family: 'Work Sans', sans-serif;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.metric-icon-box {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme='dark'] .metric-icon-box {
+  background: #1e293b;
+}
+
+.metric-card-bottom {
+  display: flex;
+  align-items: baseline;
 }
 
 .metric-value {
-  font-family: 'Newsreader', Georgia, serif;
-  font-size: 2.4rem;
-  font-weight: 700;
-  color: var(--brand-purple);
-  line-height: 1;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--text-primary, #0f172a);
+  font-family: 'Geist Mono', 'Newsreader', Georgia, serif;
+  line-height: 1.1;
 }
