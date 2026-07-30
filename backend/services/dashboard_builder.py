@@ -46,6 +46,8 @@ class DashboardBuilder:
                     continue
                 clean_x = sanitize_key(x_col)
                 clean_y = sanitize_key(num_col)
+                if clean_x == clean_y:
+                    clean_y = f"{clean_y} (val)"
                 grouped = {}
                 counts = {}
                 for x_val, n_val in zip(col_data.get(x_col, []), col_data.get(num_col, [])):

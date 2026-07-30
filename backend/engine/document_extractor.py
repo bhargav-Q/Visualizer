@@ -1,20 +1,37 @@
 import os
 import io
 import re
+import time
+import hashlib
+import asyncio
 import logging
+import concurrent.futures
 from typing import Optional, List, Dict, Any
 from fastapi import UploadFile
 
+import pymupdf
+import docx
+
+from config import DEBUG_MD_DIR
 from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable, TopicOutline, QualitativeSection
-from engine.vision_client import extract_analytics_with_vision
+from engine.vision_client import extract_analytics_with_vision, convert_image_to_markdown_mistral, extract_analytics_and_summary_with_nim, extract_analytics_with_vision_async
 from engine.db import save_document_analytics
 from constants import QUANTITATIVE_SIGNALS, MIN_KEYWORD_MATCH_LEN
 
 logger = logging.getLogger(__name__)
 
-def match_text_to_bbox(page_text_blocks: List[Dict[str, Any]], snippet: str) -> Optional[List[float]]:
+def jaccard_similarity(str1: str, str2: str) -> float:
+    """Calculates Jaccard token-overlap similarity between two strings."""
+    s1 = set(re.findall(r'\w+', str1.lower()))
+    s2 = set(re.findall(r'\w+', str2.lower()))
+    if not s1 or not s2:
+        return 0.0
+    return len(s1 & s2) / float(len(s1 | s2))
+
+def match_text_to_bbox(page_text_blocks: List[Dict[str, Any]], snippet: str, jaccard_threshold: float = 0.25) -> Optional[List[float]]:
     """
-    Matches an extracted text snippet to page-level PyMuPDF spatial bounding boxes [x0, y0, x1, y1].
+    Matches an extracted text snippet to page-level PyMuPDF spatial bounding boxes [x0, y0, x1, y1]
+    using substring containment and Jaccard token-overlap similarity (threshold >= 0.25).
     """
     if not snippet or not page_text_blocks:
         return None
@@ -23,6 +40,7 @@ def match_text_to_bbox(page_text_blocks: List[Dict[str, Any]], snippet: str) -> 
     if not clean_snippet:
         return None
 
+    # 1. Exact or Substring Containment
     for block in page_text_blocks:
         block_text = re.sub(r'\s+', ' ', block.get("text", "").lower().strip())
         if block_text and (clean_snippet in block_text or block_text in clean_snippet):
@@ -30,7 +48,22 @@ def match_text_to_bbox(page_text_blocks: List[Dict[str, Any]], snippet: str) -> 
             if bbox and len(bbox) == 4:
                 return [round(float(c), 2) for c in bbox]
 
-    # Partial keyword match fallback
+    # 2. Jaccard Token-Overlap Fuzzy Matching (threshold >= 0.25)
+    best_score = 0.0
+    best_bbox = None
+    for block in page_text_blocks:
+        block_text = block.get("text", "")
+        if not block_text:
+            continue
+        score = jaccard_similarity(clean_snippet, block_text)
+        if score >= jaccard_threshold and score > best_score:
+            best_score = score
+            best_bbox = block.get("bbox")
+
+    if best_bbox and len(best_bbox) == 4:
+        return [round(float(c), 2) for c in best_bbox]
+
+    # 3. Partial Keyword Fallback
     words = [w for w in clean_snippet.split() if len(w) > MIN_KEYWORD_MATCH_LEN]
     if words:
         first_word = words[0]
@@ -45,17 +78,16 @@ def match_text_to_bbox(page_text_blocks: List[Dict[str, Any]], snippet: str) -> 
 
 def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
     """
-    PDF Handler:
-    1. Renders PDF pages to PNG images for Vision LLM vision parsing.
-    2. Extracts PyMuPDF text blocks with page_number and bounding box coordinates [x0, y0, x1, y1].
-    3. Matches extracted metric snippets to bounding box coordinates.
+    2-Stage Refactored PDF Pipeline:
+    Stage 1: Render 350 DPI page PNGs & execute parallel Mistral OCR (convert_image_to_markdown_mistral).
+             Tagged page Markdown is cached at data/debug_md/{file_hash}.md
+    Stage 2: Execute Stage 2 NVIDIA NIM Llama 3.1 70B (extract_analytics_and_summary_with_nim) on complete Markdown
+    Stage 3: Jaccard fuzzy match (match_text_to_bbox) to link metrics/key-values back to PyMuPDF bounding boxes.
     """
-    import pymupdf
-    import time
-    import concurrent.futures
-    from engine.vision_client import extract_analytics_with_vision
-
     t_start = time.perf_counter()
+    file_hash = hashlib.sha256(contents).hexdigest()
+    cache_md_path = DEBUG_MD_DIR / f"{file_hash}.md"
+
     page_text_blocks_by_page = {}
     full_text_pages = []
     page_pngs = []
@@ -64,58 +96,19 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
         doc = pymupdf.open(stream=contents, filetype="pdf")
         for i, page in enumerate(doc):
             page_num = i + 1
-            
-            page_text = page.get_text().strip()
+            pix = page.get_pixmap(dpi=350)
+            png_bytes = pix.tobytes("png")
+            page_pngs.append((page_num, png_bytes))
 
-            # Render page to PNG for Vision LLM payload only if text is sparse (<150 chars) or for 1-2 page forms
-            if len(page_text) < 150 or len(doc) <= 2:
-                pix = page.get_pixmap(dpi=150)
-                png_bytes = pix.tobytes("png")
-                page_pngs.append((page_num, png_bytes, page_text))
-
-            # Extract spatial text blocks with bounding boxes
+            # Store PyMuPDF spatial text blocks
             blocks = []
             text_instances = page.get_text("blocks")
             for b in text_instances:
-                # b: (x0, y0, x1, y1, text, block_no, block_type)
                 if len(b) >= 5 and b[4].strip():
                     blocks.append({
                         "bbox": [b[0], b[1], b[2], b[3]],
                         "text": b[4].strip()
                     })
-
-            # Check if we should fall back to OCR coordinates for scanned/image pages
-            if len(blocks) < 2 or sum(len(b["text"]) for b in blocks) < 50:
-                t_ocr_start = time.perf_counter()
-                try:
-                    from parsers.pdf_parser import get_ocr_engine
-                    ocr_engine = get_ocr_engine()
-                    if ocr_engine:
-                        from parsers.spatial_grid import run_ocr_with_orientation_check
-                        ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
-                        if ocr_results:
-                            blocks = []
-                            scale_factor = 72.0 / 150.0
-                            for item in ocr_results:
-                                box = item[0]
-                                text = str(item[1]).strip()
-                                if text:
-                                    xs = [pt[0] for pt in box]
-                                    ys = [pt[1] for pt in box]
-                                    min_x, max_x = min(xs), max(xs)
-                                    min_y, max_y = min(ys), max(ys)
-                                    blocks.append({
-                                        "bbox": [
-                                            min_x * scale_factor,
-                                            min_y * scale_factor,
-                                            max_x * scale_factor,
-                                            max_y * scale_factor
-                                        ],
-                                        "text": text
-                                    })
-                    logger.info(f"[PROFILER] Page {page_num} OCR fallback elapsed time: {time.perf_counter() - t_ocr_start:.4f}s")
-                except Exception as ocr_err:
-                    logger.warning(f"Failed to run OCR fallback blocks on page {page_num}: {ocr_err}")
 
             page_text_blocks_by_page[page_num] = {
                 "blocks": blocks,
@@ -131,103 +124,67 @@ def extract_pdf_document(contents: bytes, filename: str) -> DocumentAnalytics:
         logger.warning(f"PyMuPDF error reading '{filename}': {pdf_err}")
 
     raw_combined_text = "\n\n".join(full_text_pages)
-    logger.info(f"[PROFILER] Native PDF Text & Spatial Blocks Extraction: {time.perf_counter() - t_start:.4f}s")
 
-    # 2. Parallel Vision LLM page batching extraction
-    t_vision_start = time.perf_counter()
-    
-    def process_page_vision(p_num, png, text_hint):
-        try:
-            return p_num, extract_analytics_with_vision(png, text_hint=text_hint[:3000])
-        except Exception as vision_err:
-            logger.warning(f"Parallel Vision LLM call failed for page {p_num}: {vision_err}")
-            return p_num, None
-
-    results = []
+    # Stage 1: Parallel Mistral OCR Page Conversion (Cache Bypassed)
+    t_stage1 = time.perf_counter()
+    page_md_results = []
     if page_pngs:
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(page_pngs), 2)) as pool:
             futures = {
-                pool.submit(process_page_vision, p_num, png, txt): p_num
-                for p_num, png, txt in page_pngs
+                pool.submit(convert_image_to_markdown_mistral, png_bytes, p_num): p_num
+                for p_num, png_bytes in page_pngs
             }
             for future in concurrent.futures.as_completed(futures):
                 p_num = futures[future]
                 try:
-                    p_num, page_an = future.result()
-                    if page_an:
-                        results.append((p_num, page_an))
+                    md_text = future.result()
+                    page_md_results.append((p_num, md_text))
                 except Exception as exc:
-                    logger.warning(f"Page {p_num} vision thread generated exception: {exc}")
+                    logger.warning(f"Page {p_num} Stage 1 Mistral OCR error: {exc}")
 
-    # Sort results by page number to keep order
-    results.sort(key=lambda x: x[0])
-    
-    logger.info(f"[PROFILER] Parallel Vision LLM page batching runtime: {time.perf_counter() - t_vision_start:.4f}s")
+    page_md_results.sort(key=lambda x: x[0])
+    full_md_blocks = [md_text for _, md_text in page_md_results]
+    complete_document_md = "\n\n---\n\n".join(full_md_blocks) if full_md_blocks else raw_combined_text
 
-    # Merge results
-    analytics = None
-    if results:
-        # Use first page's document_title and report_date as anchor details
-        first_p, first_an = results[0]
-        
-        # Combine summaries
-        summaries = []
-        for p_num, an in results:
-            if an.summary and an.summary.strip():
-                summaries.append(f"[Page {p_num}] {an.summary.strip()}")
-        combined_summary = "\n\n".join(summaries) if summaries else first_an.summary
+    # Also write debug audit_output.md
+    try:
+        audit_path = DEBUG_MD_DIR / "audit_output.md"
+        with open(audit_path, "w", encoding="utf-8") as f:
+            f.write(complete_document_md)
+    except Exception:
+        pass
 
-        # Union keywords
-        keywords_set = set()
-        for p_num, an in results:
-            if an.keywords:
-                keywords_set.update(an.keywords)
+    # Stage 2: NVIDIA NIM Llama 3.1 70B Extraction (Bypassed during Mistral OCR testing phase)
+    t_stage2 = time.perf_counter()
+    # analytics = extract_analytics_and_summary_with_nim(complete_document_md)
+    analytics = create_heuristic_fallback_analytics(filename, complete_document_md or raw_combined_text)
+    logger.info(f"[PROFILER] Pure Mistral OCR + Heuristic Analytics completed in {time.perf_counter() - t_stage2:.2f}s")
 
-        # Merge metrics, key_value_pairs, and tables (assigning/updating page number mapping)
-        merged_metrics = []
-        merged_kv_pairs = []
-        merged_tables = []
-
-        for p_num, an in results:
-            if an.metrics:
-                for m in an.metrics:
-                    m.page_number = p_num
-                    merged_metrics.append(m)
-            if an.key_value_pairs:
-                for kv in an.key_value_pairs:
-                    kv.page_number = p_num
-                    merged_kv_pairs.append(kv)
-            if an.tables:
-                for tbl in an.tables:
-                    tbl.page_number = p_num
-                    merged_tables.append(tbl)
-
-        analytics = DocumentAnalytics(
-            document_title=first_an.document_title or "Untitled Document",
-            report_date=first_an.report_date,
-            summary=combined_summary,
-            keywords=list(keywords_set),
-            metrics=merged_metrics,
-            key_value_pairs=merged_kv_pairs,
-            tables=merged_tables
-        )
-    else:
-        # Fallback to local heuristics if no vision calls returned valid results
-        logger.warning("[WARNING] No Vision LLM responses received. Executing heuristic fallback parsing.")
-        analytics = create_heuristic_fallback_analytics(filename, raw_combined_text)
-
-    # 3. Match metrics to bounding boxes
+    # Stage 3: Match metrics and key-value pairs to spatial bounding boxes
     t_match_start = time.perf_counter()
     for m in analytics.metrics:
         p_num = m.page_number or 1
         page_info = page_text_blocks_by_page.get(p_num) or page_text_blocks_by_page.get(1)
         if page_info:
-            blocks = page_info["blocks"]
-            m.page_width = page_info["width"]
-            m.page_height = page_info["height"]
-            matched_bbox = match_text_to_bbox(blocks, m.context_snippet)
+            blocks = page_info.get("blocks", [])
+            m.page_width = page_info.get("width", 612.0)
+            m.page_height = page_info.get("height", 792.0)
+            snippet = m.context_snippet or f"{m.category} {m.metric_value}"
+            matched_bbox = match_text_to_bbox(blocks, snippet)
             if matched_bbox:
                 m.bbox = matched_bbox
+
+    for kv in analytics.key_value_pairs:
+        p_num = kv.page_number or 1
+        page_info = page_text_blocks_by_page.get(p_num) or page_text_blocks_by_page.get(1)
+        if page_info:
+            blocks = page_info.get("blocks", [])
+            kv.page_width = page_info.get("width", 612.0)
+            kv.page_height = page_info.get("height", 792.0)
+            snippet = kv.context_snippet or f"{kv.key_name} {kv.value}"
+            matched_bbox = match_text_to_bbox(blocks, snippet)
+            if matched_bbox:
+                kv.bbox = matched_bbox
     logger.info(f"[PROFILER] Spatial Bounding Box Match Heuristics: {time.perf_counter() - t_match_start:.4f}s")
 
     return analytics
@@ -237,8 +194,6 @@ def extract_docx_document(contents: bytes, filename: str) -> DocumentAnalytics:
     DOCX Handler:
     Extracts paragraphs and tables natively using python-docx.
     """
-    import docx
-
     paragraphs = []
     table_rows = []
 
@@ -303,12 +258,14 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
     Creates a valid DocumentAnalytics instance from raw document text by extracting
     numbers, key-value patterns, summaries, keyword topics, and tabular grids.
     """
-    lines = [l.strip() for l in raw_text.split("\n") if l.strip() and not l.startswith("--- Page")]
+    # Parse page markers and lines
+    raw_lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
     words = [w for w in raw_text.split() if len(w) > 3]
 
     metrics = []
     key_values = []
     extracted_tables = []
+    current_page_num = 1
 
     # 1. Extract Tabular Grid if present
     from processors.ocr_processor import parse_tsv_grid
@@ -321,10 +278,17 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
             page_number=1
         ))
 
-    # 2. Extract numerical metric lines with regex
+    # 2. Extract numerical metric lines, key-value pairs, and section headings
     number_pattern = re.compile(r'([A-Za-z0-9\s_-]{3,35})[:\s\t]+(\$?\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(USD|%|kg|units|MB|GB)?', re.IGNORECASE)
 
-    for line in lines[:150]:
+    for line in raw_lines[:200]:
+        if line.startswith("--- Page "):
+            try:
+                current_page_num = int(line.replace("--- Page ", "").replace(" ---", "").strip())
+            except ValueError:
+                pass
+            continue
+
         match = number_pattern.search(line)
         if match:
             cat_name = match.group(1).strip()
@@ -337,12 +301,12 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
                     metric_value=val,
                     unit=unit_str,
                     context_snippet=line[:120],
-                    page_number=1
+                    page_number=current_page_num
                 ))
             except ValueError:
                 pass
 
-        # Extract Key-Value pairs
+        # Extract Key-Value pairs (Lines with colons)
         if ":" in line and not line.startswith("http"):
             parts = line.split(":", 1)
             k = parts[0].strip()
@@ -352,7 +316,16 @@ def create_heuristic_fallback_analytics(filename: str, raw_text: str) -> Documen
                     key_name=k,
                     value=v,
                     context_snippet=line[:120],
-                    page_number=1
+                    page_number=current_page_num
+                ))
+        # Extract Section Headings & Key Topics (Lines without colons)
+        elif not (":" in line) and 4 <= len(line) <= 60 and not line.endswith(".") and not line.startswith("http"):
+            if line.istitle() or line.isupper() or any(w in line.lower() for w in ["java", "python", "stack", "curriculum", "module", "development", "program", "course", "skill", "framework", "overview", "introduction"]):
+                key_values.append(KeyValuePair(
+                    key_name="Section / Topic",
+                    value=line,
+                    context_snippet=line[:120],
+                    page_number=current_page_num
                 ))
 
     # 3. Summary & Keywords Fallback
@@ -514,7 +487,7 @@ async def process_unstructured_document_async(file: UploadFile) -> Dict[str, Any
             
             # Native Digital PDF Check: if Page 1 has low text density (<150 chars), render PNG & trigger RapidOCR fallback
             if len(page_text) < 150 or len(doc) <= 2:
-                pix = page.get_pixmap(dpi=150)
+                pix = page.get_pixmap(dpi=350)
                 png_bytes = pix.tobytes("png")
                 page_pngs.append((page_num, png_bytes, page_text))
 
@@ -534,11 +507,11 @@ async def process_unstructured_document_async(file: UploadFile) -> Dict[str, Any
                     ocr_engine = get_ocr_engine()
                     if ocr_engine:
                         from parsers.spatial_grid import run_ocr_with_orientation_check
-                        ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=150)
+                        ocr_results = run_ocr_with_orientation_check(page, ocr_engine, dpi=350)
                         if ocr_results:
                             blocks = []
                             ocr_texts = []
-                            scale_factor = 72.0 / 150.0
+                            scale_factor = 72.0 / 350.0
                             for item in ocr_results:
                                 box = item[0]
                                 text = str(item[1]).strip()

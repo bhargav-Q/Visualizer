@@ -96,21 +96,27 @@ def align_rows_to_canonical_columns(rows_of_cells):
     derived from the widest header row, correctly handling blank/null cells.
     """
     if not rows_of_cells:
+        logger.info("[OCR_DEBUG] align_rows_to_canonical_columns input: 0 rows")
         return [], ""
+
+    logger.info(f"[OCR_DEBUG] align_rows_to_canonical_columns input: {len(rows_of_cells)} rows, total cells: {sum(len(r) for r in rows_of_cells)}")
 
     header_row = max(rows_of_cells, key=lambda r: len(r))
     if not header_row:
         return [], ""
 
     anchors = [cell["center_x"] for cell in header_row]
+    logger.info(f"[OCR_DEBUG] Canonical column anchors derived from header row: {anchors}")
 
     aligned_rows = []
     tsv_lines = []
 
-    for row in rows_of_cells:
+    for row_idx, row in enumerate(rows_of_cells):
         slots = [""] * len(anchors)
         for cell in row:
             nearest_idx = min(range(len(anchors)), key=lambda idx: abs(anchors[idx] - cell["center_x"]))
+            if slots[nearest_idx]:
+                logger.info(f"[OCR_DEBUG] Overwrite collision in row {row_idx} at anchor index {nearest_idx}: existing cell '{slots[nearest_idx]}' overwritten by new cell '{cell['text']}'")
             slots[nearest_idx] = cell["text"]
         
         aligned_rows.append(slots)
@@ -123,6 +129,8 @@ def reconstruct_grid_from_ocr(ocr_results, y_tolerance_ratio=0.6):
     Reconstructs a structured 2D table grid from RapidOCR bounding box tokens.
     Merges multi-word cells and aligns columns to canonical X-anchors.
     """
+    raw_count = len(ocr_results) if ocr_results else 0
+    logger.info(f"[OCR_DEBUG] reconstruct_grid_from_ocr input raw OCR tokens/cells count: {raw_count}")
     if not ocr_results:
         return [], ""
 
@@ -181,7 +189,7 @@ def reconstruct_grid_from_ocr(ocr_results, y_tolerance_ratio=0.6):
     # 2. Align cells to canonical column anchors
     return align_rows_to_canonical_columns(rows_of_cells)
 
-def run_ocr_with_orientation_check(page, ocr_engine, dpi=150, min_confidence=0.50):
+def run_ocr_with_orientation_check(page, ocr_engine, dpi=350, min_confidence=0.50):
     """
     Patch B + Latency Early Exit (Patch 4): Tests rotation angles (0°, 90°, 270°, 180°).
     If 0° orientation already yields clean horizontal tabular structure, early exit to save 75% compute!
@@ -262,7 +270,7 @@ def process_single_page_spatial_grid(page_data: tuple) -> tuple:
         logger.warning(f"Error processing page {page_idx+1} spatial grid: {exc}")
         return page_idx, "", [], []
 
-def run_parallel_spatial_ocr(doc, ocr_engine, dpi: int = 150, min_confidence: float = 0.50, max_workers: int = 4) -> tuple:
+def run_parallel_spatial_ocr(doc, ocr_engine, dpi: int = 350, min_confidence: float = 0.50, max_workers: int = 4) -> tuple:
     """
     Gap 1 Fix: Parallel Multi-Page Worker Orchestrator.
     Dispatches page scanning tasks concurrently across ThreadPoolExecutor workers.

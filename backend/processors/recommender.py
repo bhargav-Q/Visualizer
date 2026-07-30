@@ -41,6 +41,8 @@ class VisualizationRecommender:
                     continue
                 clean_x = sanitize_key(date_col)
                 clean_y = sanitize_key(num_col)
+                if clean_x == clean_y:
+                    clean_y = f"{clean_y} (val)"
 
                 chart_data = []
                 for d_val, n_val in zip(col_data[date_col], col_data[num_col]):
@@ -74,6 +76,8 @@ class VisualizationRecommender:
 
                 clean_x = sanitize_key(x_col)
                 clean_y = sanitize_key(num_col)
+                if clean_x == clean_y:
+                    clean_y = f"{clean_y} (val)"
 
                 grouped = {}
                 counts = {}

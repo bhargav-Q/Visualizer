@@ -57,7 +57,8 @@ class XLSXParser(BaseParser):
             metadata={
                 "row_count": total_rows,
                 "col_count": total_cols,
-                "sheet_count": len(tables)
+                "sheet_count": len(tables),
+                "warnings": raw_res.get("warnings", [])
             },
             file_bytes=file_bytes
         )

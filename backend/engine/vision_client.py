@@ -2,49 +2,147 @@ import os
 import json
 import base64
 import time
+import asyncio
 import logging
 import httpx
 from dotenv import load_dotenv
 from typing import Optional
 from openai import OpenAI, AsyncOpenAI
 from engine.pydantic_models import DocumentAnalytics
-from config import VISION_API_TIMEOUT_SECONDS, CIRCUIT_BREAKER_COOLDOWN_SECONDS
+from config import VISION_API_TIMEOUT_SECONDS, CIRCUIT_BREAKER_COOLDOWN_SECONDS, MISTRAL_OCR_MODEL, BACKEND_DIR, ROOT_DIR
 
 logger = logging.getLogger(__name__)
 
+load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+load_dotenv(dotenv_path=ROOT_DIR / ".env")
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
+mistral_api_key = os.getenv("MISTRAL_API_KEY")
 
-VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "meta/llama-3.2-11b-vision-instruct")
+VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "mistral-ocr-latest")
 
 # Shared HTTPX resilient timeout configuration
 TIMEOUT_CONFIG = httpx.Timeout(VISION_API_TIMEOUT_SECONDS, connect=5.0)
 
-def get_openai_client() -> Optional[OpenAI]:
-    """Returns an OpenAI client initialized with NVIDIA NIM base URL."""
-    if not api_key:
-        logger.warning("NVIDIA_API_KEY is missing from environment")
+def get_mistral_client():
+    """Returns initialized Mistral API client using MISTRAL_API_KEY."""
+    key = os.getenv("MISTRAL_API_KEY")
+    if not key:
+        logger.warning("MISTRAL_API_KEY is missing from environment")
         return None
-    nim_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-    return OpenAI(
-        base_url=nim_url,
-        api_key=api_key,
-        http_client=httpx.Client(timeout=TIMEOUT_CONFIG),
-        max_retries=1
-    )
+    try:
+        try:
+            from mistralai.client import Mistral
+        except ImportError:
+            from mistralai import Mistral
+        return Mistral(api_key=key)
+    except Exception as e:
+        logger.warning(f"Failed to initialize Mistral client: {e}")
+        return None
+
+def process_document_with_mistral_ocr(document_url: str = None, document_bytes: bytes = None) -> Optional[str]:
+    """
+    Executes Mistral OCR (model: mistral-ocr-latest) on document URL or raw image bytes.
+    Returns concatenated page markdown.
+    """
+    if is_vision_api_disabled():
+        logger.warning("Vision API circuit breaker active. Skipping Mistral OCR request.")
+        return None
+
+    client = get_mistral_client()
+    if not client:
+        return None
+
+    doc_payload = None
+    if document_url:
+        doc_payload = {"type": "document_url", "document_url": document_url}
+    elif document_bytes:
+        encoded = base64.b64encode(document_bytes).decode("utf-8")
+        doc_payload = {"type": "image_url", "image_url": f"data:image/png;base64,{encoded}"}
+    else:
+        return None
+
+    try:
+        ocr_response = client.ocr.process(
+            model=MISTRAL_OCR_MODEL,
+            document=doc_payload
+        )
+        if ocr_response and hasattr(ocr_response, "pages") and ocr_response.pages:
+            markdown_pages = [page.markdown for page in ocr_response.pages if hasattr(page, "markdown") and page.markdown]
+            return "\n\n".join(markdown_pages)
+    except Exception as e:
+        logger.warning(f"Mistral OCR error: {e}")
+        disable_vision_api(CIRCUIT_BREAKER_COOLDOWN_SECONDS)
+        return None
+
+# ==============================================================================
+# NVIDIA NIM API CALLS (COMMENTED OUT FOR PURE MISTRAL OCR TESTING)
+# UNCOMMENT THESE FUNCTIONS ONCE MISTRAL OCR VERIFICATION IS COMPLETE
+# ==============================================================================
+
+def get_nim_client() -> Optional[OpenAI]:
+    """Returns an OpenAI client initialized with NVIDIA NIM base URL. [DISABLED FOR MISTRAL OCR TEST]"""
+    # key = os.getenv("NVIDIA_API_KEY")
+    # if not key:
+    #     logger.warning("NVIDIA_API_KEY is missing from environment")
+    #     return None
+    # nim_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    # return OpenAI(
+    #     base_url=nim_url,
+    #     api_key=key,
+    #     http_client=httpx.Client(timeout=TIMEOUT_CONFIG),
+    #     max_retries=1
+    # )
+    return None
+
+def convert_image_to_markdown_mistral(png_bytes: bytes, page_num: int) -> str:
+    """
+    STAGE 1: Mistral OCR processes a single page PNG image into layout-accurate Markdown.
+    Tags output with <!-- PAGE X START --> and <!-- PAGE X END -->.
+    """
+    client = get_mistral_client()
+    if not client:
+        return f"<!-- PAGE {page_num} START -->\n\nPage {page_num} content.\n\n<!-- PAGE {page_num} END -->"
+
+    try:
+        encoded_b64 = base64.b64encode(png_bytes).decode("utf-8")
+        data_uri = f"data:image/png;base64,{encoded_b64}"
+
+        ocr_response = client.ocr.process(
+            model=MISTRAL_OCR_MODEL,
+            document={
+                "type": "image_url",
+                "image_url": data_uri
+            }
+        )
+
+        page_md = ocr_response.pages[0].markdown if (ocr_response and hasattr(ocr_response, "pages") and ocr_response.pages) else ""
+        clean_md = page_md.strip() if page_md else f"Page {page_num} content."
+        return f"<!-- PAGE {page_num} START -->\n\n{clean_md}\n\n<!-- PAGE {page_num} END -->"
+    except Exception as exc:
+        logger.warning(f"Mistral OCR Stage 1 error on page {page_num}: {exc}")
+        return f"<!-- PAGE {page_num} START -->\n\nPage {page_num} content.\n\n<!-- PAGE {page_num} END -->"
+
+def extract_analytics_and_summary_with_nim(aggregated_markdown: str) -> Optional[DocumentAnalytics]:
+    """
+    STAGE 2: Meta Llama 3.1 70B on NVIDIA NIM [TEMPORARILY DISABLED FOR MISTRAL OCR VERIFICATION].
+    Uncomment body below to re-enable NVIDIA Llama text extraction.
+    """
+    # client = get_nim_client()
+    # if not client:
+    #     logger.warning("NIM client unavailable for Stage 2. Falling back.")
+    #     return None
+    # model_name = os.getenv("NVIDIA_TEXT_MODEL", "meta/llama-3.1-70b-instruct")
+    # ... (NVIDIA Llama API Call preserved)
+    return None
 
 def get_async_openai_client() -> Optional[AsyncOpenAI]:
-    """Returns an AsyncOpenAI client initialized with NVIDIA NIM base URL and 15s timeout."""
-    if not api_key:
-        logger.warning("NVIDIA_API_KEY is missing from environment")
-        return None
-    nim_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-    return AsyncOpenAI(
-        base_url=nim_url,
-        api_key=api_key,
-        http_client=httpx.AsyncClient(timeout=TIMEOUT_CONFIG),
-        max_retries=1
-    )
+    """Returns an AsyncOpenAI client initialized with NVIDIA NIM base URL [DISABLED FOR MISTRAL OCR TEST]."""
+    # if not api_key:
+    #     return None
+    # nim_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    # return AsyncOpenAI(base_url=nim_url, api_key=api_key, http_client=httpx.AsyncClient(timeout=TIMEOUT_CONFIG), max_retries=1)
+    return None
 
 def encode_image_to_base64(image_bytes: bytes) -> str:
     """Encodes raw image bytes into a Base64 data URL string."""
@@ -64,179 +162,34 @@ def disable_vision_api(seconds: float = CIRCUIT_BREAKER_COOLDOWN_SECONDS):
 
 def extract_analytics_with_vision(image_bytes: bytes, text_hint: str = "", max_retries: int = 3) -> Optional[DocumentAnalytics]:
     """
-    Sends rendered PNG page image bytes to meta/llama-3.2-11b-vision-instruct
-    to extract metrics, key-value pairs, tables, summary, and keywords.
-    Enforces strict Pydantic JSON validation with retry backoff.
+    Uses Mistral OCR (mistral-ocr-latest) to process image_bytes into layout-accurate Markdown text.
+    NVIDIA Llama stage is bypassed while testing Mistral OCR.
     """
-    if is_vision_api_disabled():
-        logger.warning("NVIDIA API is temporarily disabled due to rate limit/503 errors.")
+    if not image_bytes:
         return None
 
-    client = get_openai_client()
-    if not client or not image_bytes:
+    # Step 1: Mistral OCR (Vision -> Markdown)
+    try:
+        md_text = convert_image_to_markdown_mistral(image_bytes, page_num=1)
+    except Exception as exc:
+        logger.warning(f"Mistral OCR error in extract_analytics_with_vision: {exc}")
+        md_text = text_hint or ""
+
+    if text_hint and text_hint.strip() not in md_text:
+        md_text = f"{md_text}\n\nContext Hint:\n{text_hint}"
+
+    if not md_text or not md_text.strip():
+        logger.warning("Empty Markdown extracted from image. Returning None.")
         return None
 
-    base64_url = encode_image_to_base64(image_bytes)
-
-    prompt = f"""You are an expert document analysis and vision extraction system. Analyze the attached document image and extract ALL key information into a single structured JSON response.
-
-Context Text Hint:
-{text_hint[:2000]}
-
-Return ONLY valid JSON matching this exact JSON schema:
-{{
-  "document_title": "<Title of the report or document>",
-  "report_date": "<Date of report if available e.g. 2025-01-15 or null>",
-  "summary": "<3-5 sentence TL;DR executive summary>",
-  "keywords": ["<keyword 1>", "<keyword 2>", "<keyword 3>"],
-  "metrics": [
-    {{
-      "category": "<Metric Category Name>",
-      "metric_value": 12345.67,
-      "unit": "<USD, %, kg, units or null>",
-      "context_snippet": "<Exact sentence or row text supporting this metric>",
-      "page_number": 1
-    }}
-  ],
-  "key_value_pairs": [
-    {{
-      "key_name": "<Key / Label Name>",
-      "value": "<Extracted Value>",
-      "context_snippet": "<Supporting text phrase>",
-      "page_number": 1
-    }}
-  ],
-  "tables": [
-    {{
-      "table_title": "<Table Title>",
-      "headers": ["<Col 1>", "<Col 2>", "<Col 3>"],
-      "rows": [
-        ["<Row 1 Cell 1>", "<Row 1 Cell 2>", "<Row 1 Cell 3>"]
-      ],
-      "page_number": 1
-    }}
-  ]
-}}
-
-CRITICAL EXTRACTION RULES:
-- Numerical Metrics: Extract ALL numbers, revenues, expenses, counts, percentages, and metrics. Convert monetary values to pure floating-point numbers (e.g., "$45,000.50" -> 45000.5).
-- Key-Value Pairs: Extract document attributes like Invoice #, Author, Organization, Account Number, Status, Tax ID.
-- Tables: Extract header columns and cell rows preserving left-to-right cell order.
-- Context Snippets: Include the exact sentence supporting each metric so cell coordinates can be matched.
-"""
-
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": base64_url}}
-            ]
-        }
-    ]
-
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"Querying NIM Vision API model '{VISION_MODEL_NAME}' (Attempt {attempt}/{max_retries})...")
-            completion = client.chat.completions.create(
-                model=VISION_MODEL_NAME,
-                messages=messages,
-                temperature=0.2,
-                max_tokens=4096,
-                timeout=10.0
-            )
-
-            content = completion.choices[0].message.content.strip()
-
-            # Clean reasoning tags if model includes them
-            if "<think>" in content:
-                content = content.split("</think>")[-1].strip() if "</think>" in content else content.split("<think>")[-1].strip()
-
-            start_idx = content.find("{")
-            end_idx = content.rfind("}")
-            if start_idx != -1 and end_idx != -1:
-                content = content[start_idx:end_idx+1]
-
-            data = json.loads(content)
-            try:
-                analytics = DocumentAnalytics(**data)
-            except Exception as val_err:
-                logger.warning(f"Vision LLM Pydantic validation warning on attempt {attempt}: {val_err}. Sanitizing data fields...")
-                # Sanitize dict entries if Pydantic model validation needs relaxation
-                if isinstance(data, dict):
-                    metrics_list = data.get("metrics") or []
-                    sanitized_metrics = []
-                    for m in metrics_list:
-                        if isinstance(m, dict):
-                            val = m.get("metric_value")
-                            try:
-                                float_val = float(str(val).replace("$", "").replace(",", "")) if val is not None else 0.0
-                            except ValueError:
-                                float_val = 0.0
-                            m["metric_value"] = float_val
-                            sanitized_metrics.append(m)
-                    data["metrics"] = sanitized_metrics
-
-                    tbls_list = data.get("tables") or []
-                    sanitized_tbls = []
-                    for t in tbls_list:
-                        if isinstance(t, dict) and isinstance(t.get("rows"), list):
-                            clean_rows = []
-                            for row in t["rows"]:
-                                if isinstance(row, list):
-                                    clean_row = [str(cell) if cell is not None else "" for cell in row]
-                                    clean_rows.append(clean_row)
-                            t["rows"] = clean_rows
-                            sanitized_tbls.append(t)
-                    data["tables"] = sanitized_tbls
-
-                    analytics = DocumentAnalytics(**data)
-                else:
-                    raise val_err
-
-            logger.info(f"Successfully validated DocumentAnalytics vision response: {len(analytics.metrics)} metrics, {len(analytics.key_value_pairs)} KV pairs, {len(analytics.tables)} tables")
-            return analytics
-
-        except json.JSONDecodeError as json_err:
-            logger.warning(f"Vision LLM JSON parse error on attempt {attempt}: {json_err}")
-            if attempt < max_retries:
-                time.sleep(2)
-        except Exception as err:
-            logger.warning(f"Vision LLM API error on attempt {attempt}: {err}")
-            status_code = getattr(err, "status_code", None)
-            is_rate_limit = False
-            is_timeout = False
-            
-            if status_code in (429, 503) or "503" in str(err) or "429" in str(err) or "ResourceExhausted" in str(err):
-                is_rate_limit = True
-            
-            # Check for request timeouts
-            if "timeout" in str(err).lower() or "timed out" in str(err).lower() or "timeout" in type(err).__name__.lower():
-                is_timeout = True
-
-            if is_timeout:
-                logger.warning("NVIDIA API request timed out. Disabling API calls globally for 120 seconds to prevent hangs.")
-                disable_vision_api(120.0)
-                break  # Fail fast immediately on timeouts
-
-            if is_rate_limit:
-                if attempt < max_retries:
-                    logger.info(f"Rate limit or service unavailable detected (status {status_code}). Sleeping 2 seconds before retry...")
-                    time.sleep(2)
-                else:
-                    logger.warning("NVIDIA API repeatedly failed with rate limits. Disabling API calls globally for 60 seconds.")
-                    disable_vision_api(60.0)
-            elif attempt < max_retries:
-                time.sleep(2 ** attempt) # Exponential backoff for other transient errors
-
+    # Step 2: NVIDIA NIM Llama (Commented out during Mistral OCR testing phase)
+    # return extract_analytics_and_summary_with_nim(md_text)
     return None
 
 async def extract_analytics_with_vision_async(image_bytes: bytes, text_hint: str = "") -> Optional[DocumentAnalytics]:
     """
     Async non-blocking version of extract_analytics_with_vision.
-    Enforces a strict 15-second timeout limit.
     """
-    import asyncio
     try:
         return await asyncio.to_thread(extract_analytics_with_vision, image_bytes, text_hint, max_retries=1)
     except Exception as exc:

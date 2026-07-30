@@ -31,18 +31,6 @@ class DocumentPipelineService:
             file_hash=file_hash
         )
 
-        # 0. Check SHA-256 Cache
-        try:
-            cached_payload = get_cached_analytics(file_hash)
-            if cached_payload:
-                logger.info(f"[PROFILER] Cache HIT for file '{filename}' (hash: {file_hash})")
-                cached_payload["file_name"] = filename
-                cached_payload["processing_time"] = round(time.perf_counter() - t0, 4)
-                context.is_cached = True
-                return UploadResponse(**cached_payload)
-        except Exception as cache_err:
-            logger.warning(f"Cache lookup failed: {cache_err}. Executing fresh pipeline...")
-
         # Stage 1: Parser Lookup & Execution
         t_stage = time.perf_counter()
         parser = self.parser_factory.get_parser(file_bytes, filename)
@@ -61,17 +49,6 @@ class DocumentPipelineService:
         context.model = DocumentEnricher.enrich(context.model)
         context.record_stage_time("enrich", (time.perf_counter() - t_stage) * 1000)
 
-        # Stage 3.5: Canonical Document IR AST Generation
-        t_stage = time.perf_counter()
-        from processors.canonical_builder import CanonicalIRBuilder
-        context.canonical_ir = CanonicalIRBuilder.build_ir(
-            model=context.model,
-            content=context.content,
-            parser_name=context.parser_used or "BaseParserAdapter",
-            execution_time_ms=context.stage_timings_ms.get("parse", 0.0)
-        )
-        context.record_stage_time("canonical_ir", (time.perf_counter() - t_stage) * 1000)
-
         # Stage 4: Data Profiling
         t_stage = time.perf_counter()
         context.profile = DataProfiler.profile(context.model)
@@ -86,62 +63,53 @@ class DocumentPipelineService:
         analytics_data = None
         if context.model.data_category != "tabular":
             t_stage = time.perf_counter()
+        try:
+            from engine.document_extractor import create_heuristic_fallback_analytics, merge_native_and_vision_data, save_document_analytics
+            raw_analytics = create_heuristic_fallback_analytics(filename, context.model.raw_text)
+            
+            # Merge summary and keywords from profile if present
+            if context.profile:
+                if context.profile.summary:
+                    raw_analytics.summary = context.profile.summary
+                if context.profile.keywords:
+                    raw_analytics.keywords = [k.word if hasattr(k, "word") else str(k) for k in context.profile.keywords]
+
+            # Match spatial bounding boxes if page blocks are available
+            if context.content and context.content.blocks_by_page:
+                merged = merge_native_and_vision_data(
+                    {"blocks_by_page": context.content.blocks_by_page, "text": context.model.raw_text},
+                    raw_analytics,
+                    filename
+                )
+                analytics_data = merged.get("analytics")
+            else:
+                analytics_data = raw_analytics
+
+            # Persist analytics to DuckDB for metrics API endpoints
             try:
-                from engine.document_extractor import create_heuristic_fallback_analytics, merge_native_and_vision_data, save_document_analytics
-                raw_analytics = create_heuristic_fallback_analytics(filename, context.model.raw_text)
-                
-                # Merge summary and keywords from profile if present
-                if context.profile:
-                    if context.profile.summary:
-                        raw_analytics.summary = context.profile.summary
-                    if context.profile.keywords:
-                        raw_analytics.keywords = [k.word if hasattr(k, "word") else str(k) for k in context.profile.keywords]
+                if hasattr(analytics_data, "metrics"):
+                    save_document_analytics(filename, analytics_data)
+            except Exception as db_err:
+                logger.warning(f"DuckDB save error: {db_err}")
 
-                # Match spatial bounding boxes if page blocks are available
-                if context.content and context.content.blocks_by_page:
-                    merged = merge_native_and_vision_data(
-                        {"blocks_by_page": context.content.blocks_by_page, "text": context.model.raw_text},
-                        raw_analytics,
-                        filename
-                    )
-                    analytics_data = merged.get("analytics")
-                else:
-                    analytics_data = raw_analytics
-
-                # Persist analytics to DuckDB for metrics API endpoints
-                try:
-                    if hasattr(analytics_data, "metrics"):
-                        save_document_analytics(filename, analytics_data)
-                except Exception as db_err:
-                    logger.warning(f"DuckDB save error: {db_err}")
-
-            except Exception as analytics_err:
-                logger.warning(f"Analytics extraction error for '{filename}': {analytics_err}")
-            context.record_stage_time("analytics", (time.perf_counter() - t_stage) * 1000)
+        except Exception as analytics_err:
+            logger.warning(f"Analytics extraction error for '{filename}': {analytics_err}")
+        context.record_stage_time("analytics", (time.perf_counter() - t_stage) * 1000)
 
         # Stage 6: Dashboard Response Construction via Exporter
+        # Stage 6: Dashboard Response Export
         t_stage = time.perf_counter()
         elapsed_total = time.perf_counter() - t0
-        from exporters.dashboard_exporter import DashboardExporter
-        exporter = DashboardExporter()
-        response = exporter.export(
-            doc_ir=context.canonical_ir,
+        from services.dashboard_builder import DashboardBuilder
+        response = DashboardBuilder.build_response(
+            model=context.model,
             profile=context.profile,
             recommendations=context.recommendations,
             analytics=analytics_data,
             processing_time=elapsed_total
         )
         context.record_stage_time("build_response", (time.perf_counter() - t_stage) * 1000)
-        context.record_stage_time("build_response", (time.perf_counter() - t_stage) * 1000)
         context.response = response
-
-        # Save to Cache
-        try:
-            cache_dict = response.model_dump()
-            cache_dict.pop("processing_time", None)
-            save_cached_analytics(file_hash, filename, cache_dict)
-        except Exception as cache_err:
-            logger.warning(f"Failed to cache response in pipeline service: {cache_err}")
 
         return response
 

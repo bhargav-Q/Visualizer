@@ -38,9 +38,9 @@ class FileDetector:
             return ".xls", "application/vnd.ms-excel"
 
         # Text file detection fallback
-        if ext in [".csv", ".txt", ".md", ".rtf"]:
-            if ext == ".csv":
-                return ".csv", "text/csv"
-            return ext, "text/plain"
+        if ext == ".csv":
+            return ".csv", "text/csv"
+        if ext == ".txt":
+            return ".txt", "text/plain"
 
         return ext or ".txt", "application/octet-stream"

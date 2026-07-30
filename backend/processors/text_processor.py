@@ -1,6 +1,9 @@
 import os
+import re
 import json
+import asyncio
 import logging
+from collections import Counter
 from typing import List, Optional, Any
 from dotenv import load_dotenv
 from pathlib import Path
@@ -29,8 +32,7 @@ def extract_qualitative_sections(raw_text: str) -> List[QualitativeSectionRespon
     if not raw_text or not raw_text.strip():
         return []
 
-    import re
-    model_name = os.getenv("TEXT_AI_MODEL", "meta/llama-3.1-70b-instruct")
+    model_name = os.getenv("TEXT_AI_MODEL", "mistral-ocr-latest")
 
     # Local Deterministic Fallback Parser Function
     def parse_local_qualitative_topics(text: str) -> List[QualitativeSectionResponse]:
@@ -90,8 +92,8 @@ def extract_qualitative_sections(raw_text: str) -> List[QualitativeSectionRespon
             extracted_highlights=highlights[:15]
         )]
 
-    if not api_key or is_vision_api_disabled():
-        return parse_local_qualitative_topics(raw_text)
+    # NVIDIA API temporarily bypassed for pure Mistral OCR testing phase
+    return parse_local_qualitative_topics(raw_text)
 
     try:
         client = OpenAI(
@@ -122,7 +124,7 @@ def extract_qualitative_sections(raw_text: str) -> List[QualitativeSectionRespon
         }}
 
         Document Text:
-        {raw_text[:8000]}
+        {raw_text}
         """
 
         completion = client.chat.completions.create(
@@ -192,8 +194,6 @@ def generate_local_fallback_text_result(raw_text: str, page_count: int = None, p
     summary_text = "\n".join(summary_bullets)
 
     # 2. Term Frequency Keyword Ranking
-    import re
-    from collections import Counter
     words = re.findall(r'\b[A-Za-z0-9_-]{3,25}\b', (raw_text or "").lower())
     filtered_words = [w for w in words if w not in ENGLISH_STOPWORDS and not w.isdigit()]
     
@@ -223,13 +223,12 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
     word_count = len(raw_text.split())
     api_key = os.getenv("NVIDIA_API_KEY")
     base_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-    model_name = os.getenv("TEXT_AI_MODEL", "meta/llama-3.1-70b-instruct")
+    model_name = os.getenv("TEXT_AI_MODEL", "mistral-ocr-latest")
 
     from engine.vision_client import is_vision_api_disabled, disable_vision_api
     
-    # Heuristic Fallback if API Key missing or Circuit Breaker Active
-    if not api_key or is_vision_api_disabled():
-        return generate_local_fallback_text_result(raw_text, page_count, paragraph_count, model_name)
+    # NVIDIA API temporarily bypassed for pure Mistral OCR testing phase
+    return generate_local_fallback_text_result(raw_text, page_count, paragraph_count, model_name)
 
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
@@ -252,7 +251,7 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
     }}
     
     Text to analyze:
-    {raw_text[:8000]}
+    {raw_text}
     """
 
     try:

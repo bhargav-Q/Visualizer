@@ -50,11 +50,19 @@ def parse_tsv_grid(raw_text: str) -> dict | None:
                         clean_cells.append(cell)
             candidate_rows.append(clean_cells)
 
+    logger.info(f"[OCR_DEBUG] parse_tsv_grid len(candidate_rows) before filtering: {len(candidate_rows)}")
     if len(candidate_rows) >= 2:
         col_counts = [len(r) for r in candidate_rows]
         dominant_cols = max(set(col_counts), key=col_counts.count)
+        logger.info(f"[OCR_DEBUG] parse_tsv_grid full col_counts: {col_counts}")
+        logger.info(f"[OCR_DEBUG] parse_tsv_grid computed dominant_cols: {dominant_cols}")
         if dominant_cols >= 2:
             matching_rows = [r for r in candidate_rows if len(r) == dominant_cols]
+            dropped_rows = [r for r in candidate_rows if len(r) != dominant_cols]
+            logger.info(f"[OCR_DEBUG] parse_tsv_grid len(matching_rows) after filtering: {len(matching_rows)}")
+            for idx, dropped in enumerate(dropped_rows):
+                logger.info(f"[OCR_DEBUG] parse_tsv_grid dropped row {idx} (len={len(dropped)} != dominant_cols={dominant_cols}): {dropped}")
+
             if len(matching_rows) >= 2:
                 # Check if column 0 is predominantly question/bullet index markers (e.g. (a), (b), (c), 1., 2.)
                 col0_vals = [str(r[0]).strip().lower() for r in matching_rows if r]
@@ -87,9 +95,8 @@ def extract_tables_from_text(raw_text: str) -> dict | None:
 
     from engine.vision_client import is_vision_api_disabled, disable_vision_api
 
-    if not api_key or is_vision_api_disabled():
-        logger.warning("NVIDIA_API_KEY missing or API disabled — using deterministic TSV table fallback if available")
-        return deterministic_table
+    # NVIDIA API temporarily bypassed for pure Mistral OCR testing phase
+    return deterministic_table
 
     try:
         client = OpenAI(

@@ -30,6 +30,9 @@ def get_db_path() -> str:
             p = (ROOT_DIR / raw).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
         return str(p)
+    default_p = (DATA_DIR / "visualizer.duckdb").resolve()
+    default_p.parent.mkdir(parents=True, exist_ok=True)
+    return str(default_p)
 _shared_conn = None
 
 def get_db_connection(read_only: bool = False):
