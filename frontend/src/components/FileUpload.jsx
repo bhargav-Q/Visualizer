@@ -88,7 +88,7 @@ const FileUpload = ({ onFileSelect }) => {
           type="file"
           ref={fileInputRef}
           onChange={handleFileInput}
-          accept=".xlsx,.csv,.pdf,.docx,.doc,.txt"
+          accept=".xlsx,.csv,.pdf,.docx"
           className="hidden-input"
         />
         

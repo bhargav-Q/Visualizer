@@ -34,3 +34,10 @@ def test_upload_invalid_file_type():
     response = client.post("/api/upload", files=files)
     assert response.status_code == 400
     assert "Unsupported file type" in response.json()["detail"]
+
+def test_upload_rejected_txt_and_image_types():
+    for filename in ["notes.txt", "diagram.png", "photo.jpg"]:
+        files = {"file": (filename, b"content", "text/plain")}
+        response = client.post("/api/upload", files=files)
+        assert response.status_code == 400
+        assert "Unsupported file type" in response.json()["detail"]

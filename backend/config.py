@@ -17,10 +17,6 @@ MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024  # 16MB
 MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", "15"))
 SPARSE_TEXT_THRESHOLD_CHARS = int(os.getenv("SPARSE_TEXT_THRESHOLD", "150"))
 
-# Timeouts & Circuit Breakers
-VISION_API_TIMEOUT_SECONDS = float(os.getenv("VISION_TIMEOUT", "15.0"))
-CIRCUIT_BREAKER_COOLDOWN_SECONDS = float(os.getenv("CIRCUIT_BREAKER_COOLDOWN", "60.0"))
-
 # OCR & Vision AI Models
 DEFAULT_OCR_DPI = int(os.getenv("OCR_DPI", "350"))
 MISTRAL_OCR_MODEL = os.getenv("MISTRAL_OCR_MODEL", "mistral-ocr-latest")

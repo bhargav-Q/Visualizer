@@ -10,7 +10,6 @@ from pathlib import Path
 import httpx
 from openai import OpenAI, AsyncOpenAI
 from models.schemas import TextResult, KeywordItem, QualitativeSectionResponse, TopicOutlineResponse
-from engine.vision_client import is_vision_api_disabled, disable_vision_api
 from constants import DocumentDomain, ENGLISH_STOPWORDS, MIN_TOPIC_TITLE_LEN
 
 logger = logging.getLogger(__name__)
@@ -225,8 +224,6 @@ def process_text(raw_text: str, page_count: int = None, paragraph_count: int = N
     base_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
     model_name = os.getenv("TEXT_AI_MODEL", "mistral-ocr-latest")
 
-    from engine.vision_client import is_vision_api_disabled, disable_vision_api
-    
     # NVIDIA API temporarily bypassed for pure Mistral OCR testing phase
     return generate_local_fallback_text_result(raw_text, page_count, paragraph_count, model_name)
 

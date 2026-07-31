@@ -11,3 +11,6 @@ requests
 rapidocr-onnxruntime
 python-docx
 duckdb
+mistralai
+pandas
+tabulate

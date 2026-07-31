@@ -27,8 +27,12 @@ def run_file_to_dashboard_pipeline(
     base_name = os.path.splitext(filename)[0]
     file_ext = filename.split(".")[-1].lower() if "." in filename else "pdf"
 
-    # BRANCH 1: Tabular Files (CSV / XLSX / XLS) -> Native Engine
-    if file_ext in ["csv", "xlsx", "xls"]:
+    # WHY: We branch execution at the top of the pipeline based on file extension.
+    # Tabular files (.csv, .xlsx) contain structured matrices processed deterministically 
+    # via native pandas in <0.5s without incurring cloud OCR latency or API cost.
+    # Unstructured files (.pdf, .docx) route to Mistral OCR + DeepSeek-V4-Flash.
+    # BRANCH 1: Tabular Files (CSV / XLSX) -> Native Engine
+    if file_ext in ["csv", "xlsx"]:
         logger.info(f"[PIPELINE] Processing tabular file '{filename}' via native pandas engine.")
         return process_tabular_file(
             file_path=file_path,
@@ -36,8 +40,8 @@ def run_file_to_dashboard_pipeline(
             filename=filename
         )
 
-    # BRANCH 2: Unstructured Files (PDF / Images / Docs) -> Mistral OCR + DeepSeek-V4-Flash Agent
-    elif file_ext in ["pdf", "png", "jpg", "jpeg", "webp", "docx", "txt"]:
+    # BRANCH 2: Unstructured Files (PDF / DOCX) -> Mistral OCR + DeepSeek-V4-Flash Agent
+    elif file_ext in ["pdf", "docx"]:
         logger.info(f"[PIPELINE] Processing document '{filename}' via Mistral OCR + DeepSeek-V4-Flash Agent.")
         output_md_path = os.path.join(output_dir, f"{base_name}.md")
         

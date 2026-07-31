@@ -8,21 +8,16 @@ logger = logging.getLogger(__name__)
 _ocr_engine = None
 
 def get_ocr_engine():
-    # RAPIDOCR LOCAL ENGINE COMMENTED OUT PRESERVED FOR REFERENCE:
-    # global _ocr_engine
-    # from engine.vision_client import is_vision_api_disabled
-    # if is_vision_api_disabled():
-    #     return None
-    #
-    # if _ocr_engine is None:
-    #     try:
-    #         from rapidocr_onnxruntime import RapidOCR
-    #         _ocr_engine = RapidOCR()
-    #     except Exception as e:
-    #         logger.warning(f"Could not load RapidOCR engine: {e}")
-    #         _ocr_engine = False
-    # return _ocr_engine if _ocr_engine is not False else None
-    return None
+    """Lazy load RapidOCR engine singleton if available."""
+    global _ocr_engine
+    if _ocr_engine is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _ocr_engine = RapidOCR()
+        except Exception as e:
+            logger.warning(f"Could not load RapidOCR engine: {e}")
+            _ocr_engine = False
+    return _ocr_engine if _ocr_engine is not False else None
 
 def process_page_parallel(job: dict) -> dict:
     """

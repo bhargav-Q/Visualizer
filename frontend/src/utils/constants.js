@@ -8,11 +8,10 @@ export const ALLOWED_TYPES = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'application/pdf': '.pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-  'text/csv': '.csv',
-  'text/plain': '.txt'
+  'text/csv': '.csv'
 };
 
-export const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.pdf', '.docx', '.txt'];
+export const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.pdf', '.docx'];
 
 // UI Design Tokens & Palettes
 export const PIE_COLORS = ['#6a1b9a', '#9c4dcc', '#2563eb', '#22c55e', '#d97700', '#dc2626'];

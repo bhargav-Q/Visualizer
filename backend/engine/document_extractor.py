@@ -14,7 +14,6 @@ import docx
 
 from config import DEBUG_MD_DIR
 from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable, TopicOutline, QualitativeSection
-from engine.vision_client import extract_analytics_with_vision, convert_image_to_markdown_mistral, extract_analytics_and_summary_with_nim, extract_analytics_with_vision_async
 from engine.db import save_document_analytics
 from constants import QUANTITATIVE_SIGNALS, MIN_KEYWORD_MATCH_LEN
 

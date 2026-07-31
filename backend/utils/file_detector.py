@@ -40,7 +40,5 @@ class FileDetector:
         # Text file detection fallback
         if ext == ".csv":
             return ".csv", "text/csv"
-        if ext == ".txt":
-            return ".txt", "text/plain"
 
-        return ext or ".txt", "application/octet-stream"
+        return ext, "application/octet-stream"
