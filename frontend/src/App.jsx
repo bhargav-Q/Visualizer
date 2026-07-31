@@ -92,7 +92,7 @@ function App() {
             {/* Left Column: Title, Subtitle & Capability Cards */}
             <div className="hero-left-col">
               <h2 className="hero-title">Upload a File to Begin</h2>
-              <p className="hero-subtitle">We support spreadsheets (.xlsx, .csv) and document files (.pdf, .docx, .txt) up to 16MB.</p>
+              <p className="hero-subtitle">We support spreadsheets (.xlsx, .csv) and document files (.pdf, .docx) up to 16MB.</p>
 
               <div className="capabilities-showcase">
                 <h4 className="capabilities-title">What You Can Visualize</h4>
@@ -111,7 +111,7 @@ function App() {
                       <FileText size={20} color="var(--color-ai-sales)" />
                     </div>
                     <h5>Document Summaries</h5>
-                    <p className="capability-formats">.PDF &bull; .DOCX &bull; .TXT</p>
+                    <p className="capability-formats">.PDF &bull; .DOCX</p>
                     <p className="capability-desc">Executive AI TL;DR summary & top keyword cloud.</p>
                   </div>
                 </div>

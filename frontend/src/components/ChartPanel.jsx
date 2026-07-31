@@ -64,7 +64,10 @@ const SingleChartCard = ({ chart, idx }) => {
 
   const pageRangeTag = chart.page_range || chart.page_number;
 
-  // Smart XAxis configuration responsive to expanded/maximized vs minimized card state
+  // WHY: We switch X-axis label interval and rotation dynamically based on `isExpanded`.
+  // In minimized grid view (!isExpanded), rendering 35+ ticks forces text collision; 
+  // so we set interval="preserveStartEnd" to let Recharts auto-sample ticks cleanly.
+  // In maximized view (isExpanded), we set interval={0} with -45deg rotation to unhide 100% of labels.
   const xAxisConfig = useMemo(() => {
     const count = normalizedData.length;
 
