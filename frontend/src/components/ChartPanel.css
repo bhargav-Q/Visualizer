@@ -85,6 +85,24 @@
   letter-spacing: 0.5px;
 }
 
+.chart-page-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  padding: 2px 8px;
+  border-radius: 12px;
+  letter-spacing: 0.3px;
+  transition: all 0.2s ease;
+}
+
+.chart-page-badge:hover {
+  background: rgba(124, 58, 237, 0.16);
+}
+
 /* Controls Group: Chart Type Switcher & Action Buttons */
 .chart-controls-group {
   display: flex;
@@ -168,4 +186,58 @@
 
 .chart-tooltip p {
   margin: 0;
+}
+
+/* Custom Pie Chart Legend Styling */
+.pie-custom-legend-wrapper {
+  max-height: 85px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 10px 4px 10px;
+  margin-top: -15px;
+  border-top: 1px dashed var(--border-color, rgba(148, 163, 184, 0.2));
+}
+
+.chart-container.expanded .pie-custom-legend-wrapper {
+  max-height: 130px;
+}
+
+/* Thin custom scrollbar for legend */
+.pie-custom-legend-wrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.pie-custom-legend-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 4px;
+}
+
+.pie-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: default;
+  transition: opacity 0.2s ease;
+}
+
+.pie-legend-item:hover {
+  opacity: 0.85;
+}
+
+.pie-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pie-legend-text {
+  white-space: nowrap;
+  letter-spacing: 0.2px;
 }

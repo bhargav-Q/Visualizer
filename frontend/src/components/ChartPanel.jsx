@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Maximize2, Minimize2, BarChart2, TrendingUp, PieChart as PieIcon, Activity, Download } from 'lucide-react';
+import { Maximize2, Minimize2, BarChart2, TrendingUp, PieChart as PieIcon, Activity, Download, FileText } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend
@@ -62,6 +62,70 @@ const SingleChartCard = ({ chart, idx }) => {
     document.body.removeChild(link);
   };
 
+  const pageRangeTag = chart.page_range || chart.page_number;
+
+  // Smart XAxis configuration responsive to expanded/maximized vs minimized card state
+  const xAxisConfig = useMemo(() => {
+    const count = normalizedData.length;
+
+    if (!isExpanded) {
+      // Minimized Card View: Auto-sample overlapping labels to keep card clean & uncluttered
+      if (count > 12) {
+        return {
+          interval: 'preserveStartEnd',
+          angle: -30,
+          textAnchor: 'end',
+          height: 42,
+          tick: { fill: '#94a3b8', fontSize: 10 }
+        };
+      } else if (count > 5) {
+        return {
+          interval: 'preserveStartEnd',
+          angle: -25,
+          textAnchor: 'end',
+          height: 38,
+          tick: { fill: '#94a3b8', fontSize: 10 }
+        };
+      }
+      return {
+        interval: 0,
+        height: 30,
+        tick: { fill: '#94a3b8', fontSize: 11 }
+      };
+    } else {
+      // Maximized Card View: Unhide 100% of labels (interval=0) with full room to display
+      if (count > 12) {
+        return {
+          interval: 0,
+          angle: -45,
+          textAnchor: 'end',
+          height: 75,
+          tick: { fill: '#94a3b8', fontSize: 9.5 }
+        };
+      } else if (count > 5) {
+        return {
+          interval: 0,
+          angle: -30,
+          textAnchor: 'end',
+          height: 50,
+          tick: { fill: '#94a3b8', fontSize: 10 }
+        };
+      }
+      return {
+        interval: 0,
+        height: 30,
+        tick: { fill: '#94a3b8', fontSize: 11 }
+      };
+    }
+  }, [normalizedData.length, isExpanded]);
+
+  const chartMargin = useMemo(() => ({
+    top: 20,
+    right: 25,
+    left: 10,
+    bottom: xAxisConfig.height + 5
+  }), [xAxisConfig.height]);
+
   return (
     <div 
       className={`chart-container glass-panel ${isExpanded ? 'expanded' : ''}`}
@@ -72,6 +136,12 @@ const SingleChartCard = ({ chart, idx }) => {
         <div className="chart-title-group">
           <h4>{chart.title || 'Data Insights'}</h4>
           <span className="chart-type-badge">{activeType.toUpperCase()}</span>
+          {pageRangeTag && (
+            <span className="chart-page-badge" title={`Source document location: ${pageRangeTag}`}>
+              <FileText size={11} style={{ marginRight: '4px' }} />
+              {String(pageRangeTag).toLowerCase().includes('page') ? pageRangeTag : `Page ${pageRangeTag}`}
+            </span>
+          )}
         </div>
 
         <div className="chart-controls-group">
@@ -144,9 +214,9 @@ const SingleChartCard = ({ chart, idx }) => {
       </div>
 
       <div className="chart-wrapper">
-        <ResponsiveContainer width="99%" height={isExpanded ? 420 : 310} minHeight={280}>
+        <ResponsiveContainer width="99%" height={isExpanded ? 450 : 320 + (xAxisConfig.height > 40 ? 30 : 0)} minHeight={280}>
           {activeType === 'bar' ? (
-            <BarChart data={normalizedData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
+            <BarChart data={normalizedData} margin={chartMargin}>
               <defs>
                 <linearGradient id={`barGrad-${idx}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.9}/>
@@ -154,21 +224,21 @@ const SingleChartCard = ({ chart, idx }) => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" vertical={false} />
-              <XAxis dataKey={xKey} stroke="#94a3b8" tick={{fill: '#94a3b8', fontSize: 11}} />
+              <XAxis dataKey={xKey} stroke="#94a3b8" {...xAxisConfig} />
               <YAxis stroke="#94a3b8" tick={{fill: '#94a3b8', fontSize: 11}} />
               <RechartsTooltip content={<CustomTooltip />} />
               <Bar dataKey={yKey} fill={`url(#barGrad-${idx})`} radius={[6, 6, 0, 0]} />
             </BarChart>
           ) : activeType === 'line' ? (
-            <LineChart data={normalizedData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
+            <LineChart data={normalizedData} margin={chartMargin}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" vertical={false} />
-              <XAxis dataKey={xKey} stroke="#94a3b8" tick={{fill: '#94a3b8', fontSize: 11}} />
+              <XAxis dataKey={xKey} stroke="#94a3b8" {...xAxisConfig} />
               <YAxis stroke="#94a3b8" tick={{fill: '#94a3b8', fontSize: 11}} />
               <RechartsTooltip content={<CustomTooltip />} />
               <Line type="monotone" dataKey={yKey} stroke="#6366f1" strokeWidth={3} dot={{r: 4, fill: "#ffffff", stroke: "#ec4899", strokeWidth: 2}} activeDot={{r: 7}} />
             </LineChart>
           ) : activeType === 'area' ? (
-            <AreaChart data={normalizedData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
+            <AreaChart data={normalizedData} margin={chartMargin}>
               <defs>
                 <linearGradient id={`areaGrad-${idx}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
@@ -176,7 +246,7 @@ const SingleChartCard = ({ chart, idx }) => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" vertical={false} />
-              <XAxis dataKey={xKey} stroke="#94a3b8" tick={{fill: '#94a3b8', fontSize: 11}} />
+              <XAxis dataKey={xKey} stroke="#94a3b8" {...xAxisConfig} />
               <YAxis stroke="#94a3b8" tick={{fill: '#94a3b8', fontSize: 11}} />
               <RechartsTooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey={yKey} stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill={`url(#areaGrad-${idx})`} />
@@ -186,9 +256,9 @@ const SingleChartCard = ({ chart, idx }) => {
               <Pie
                 data={normalizedData}
                 cx="50%"
-                cy="45%"
-                innerRadius={isExpanded ? 70 : 45}
-                outerRadius={isExpanded ? 110 : 75}
+                cy="42%"
+                innerRadius={isExpanded ? 65 : 40}
+                outerRadius={isExpanded ? 100 : 65}
                 paddingAngle={4}
                 dataKey={yKey}
                 nameKey={xKey}
@@ -198,10 +268,25 @@ const SingleChartCard = ({ chart, idx }) => {
                 ))}
               </Pie>
               <RechartsTooltip content={<CustomTooltip />} />
-              <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontSize: 11, color: '#94a3b8'}} />
             </PieChart>
           )}
         </ResponsiveContainer>
+
+        {activeType === 'pie' && (
+          <div className="pie-custom-legend-wrapper">
+            {normalizedData.map((entry, index) => {
+              const label = String(entry[xKey] || `Item ${index + 1}`);
+              const color = PIE_COLORS[index % PIE_COLORS.length];
+              const val = entry[yKey];
+              return (
+                <div key={index} className="pie-legend-item" title={`${label}: ${val}`}>
+                  <span className="pie-legend-dot" style={{ backgroundColor: color }} />
+                  <span className="pie-legend-text" style={{ color: color }}>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
