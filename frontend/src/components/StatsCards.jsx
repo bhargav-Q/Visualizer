@@ -21,7 +21,7 @@ const getCategoryIcon = (label = '') => {
 
 const StatsCards = ({ metrics, kpis }) => {
   const cardList = kpis && kpis.length > 0 
-    ? kpis.map(k => ({ title: k.label, value: k.value }))
+    ? kpis.map(k => ({ title: k.label, value: k.value, page_range: k.page_range || k.page_number }))
     : (metrics || []);
 
   if (!cardList || cardList.length === 0) return null;
@@ -35,6 +35,7 @@ const StatsCards = ({ metrics, kpis }) => {
       {cardList.map((metric, idx) => {
         const title = metric.title || metric.label || 'Metric';
         const val = metric.value !== undefined && metric.value !== null ? metric.value : 'N/A';
+        const pageTag = metric.page_range || metric.page_number;
 
         return (
           <div 
@@ -50,6 +51,12 @@ const StatsCards = ({ metrics, kpis }) => {
             </div>
             <div className="metric-card-bottom">
               <span className="metric-value">{val}</span>
+              {pageTag && (
+                <span className="kpi-page-badge" title={`Source document location: ${pageTag}`}>
+                  <FileText size={11} style={{ marginRight: '3px' }} />
+                  {String(pageTag).toLowerCase().includes('page') ? pageTag : `Page ${pageTag}`}
+                </span>
+              )}
             </div>
           </div>
         );

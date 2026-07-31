@@ -76,7 +76,8 @@ const Dashboard = ({ data, onReset }) => {
   });
 
   // Key Value pairs filtering
-  const filteredKeyValuePairs = (data.analytics?.key_value_pairs || []).filter(kv => {
+  const rawKvList = data.key_value_pairs || data.analytics?.key_value_pairs || [];
+  const filteredKeyValuePairs = rawKvList.filter(kv => {
     const term = searchTerm.toLowerCase();
     const key = (kv.key_name || '').toLowerCase();
     const val = (kv.value || '').toLowerCase();
