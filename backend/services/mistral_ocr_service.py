@@ -3,8 +3,8 @@ import mimetypes
 import os
 import io
 import logging
+from typing import Optional, Any
 from dotenv import load_dotenv
-from mistralai.client import Mistral
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -13,13 +13,17 @@ load_dotenv()
 api_key = os.environ.get("MISTRAL_API_KEY")
 _mistral_client = None
 
-def get_mistral_client() -> Mistral:
+def get_mistral_client() -> Any:
     global _mistral_client
     if _mistral_client is None:
         key = os.environ.get("MISTRAL_API_KEY")
         if not key:
             raise ValueError("MISTRAL_API_KEY is missing from environment variables.")
-        _mistral_client = Mistral(api_key=key)
+        try:
+            from mistralai.client import Mistral
+            _mistral_client = Mistral(api_key=key)
+        except ImportError:
+            raise ImportError("The 'mistralai' package is not installed. Please run 'pip install mistralai'.")
     return _mistral_client
 
 def encode_file_to_base64(file_path: str) -> str:

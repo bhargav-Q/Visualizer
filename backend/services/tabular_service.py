@@ -121,7 +121,10 @@ def process_tabular_file(file_path: str = None, file_bytes: bytes = None, filena
     df_display = df_processed.fillna("")
     formatted_cols = [{"name": str(c), "dtype": str(df_processed[c].dtype)} for c in df_processed.columns]
     preview_rows = df_display.head(100).to_dict(orient="records")
-    raw_markdown = df_display.head(10).to_markdown(index=False)
+    try:
+        raw_markdown = df_display.head(10).to_markdown(index=False)
+    except Exception:
+        raw_markdown = df_display.head(10).to_string(index=False)
 
     tabular_dict = {
         "row_count": row_count,

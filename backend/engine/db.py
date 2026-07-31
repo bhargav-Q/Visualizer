@@ -18,7 +18,9 @@ except Exception as _duckdb_err:
     HAS_DUCKDB = False
     logger.warning(f"DuckDB unavailable ({_duckdb_err}). Falling back to SQLite3 for persistence.")
 
-# Global reentrant thread locks for DB operations
+# WHY: DuckDB does not support concurrent write handles across Python threads natively.
+# We wrap all database calls in reentrant locks (db_write_lock, db_read_lock) and provide an 
+# automated SQLite3 fallback so async worker threads never deadlock or crash on file locks.
 db_write_lock = threading.RLock()
 db_read_lock = threading.RLock()
 
