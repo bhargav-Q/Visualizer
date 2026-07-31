@@ -3,15 +3,22 @@ import json
 import uuid
 import logging
 import threading
-import duckdb
 from pathlib import Path
 from typing import List, Dict, Any
 from engine.pydantic_models import DocumentAnalytics, ExtractedMetric, KeyValuePair, ExtractedTable
 
 logger = logging.getLogger(__name__)
 
-# Global reentrant thread locks for DuckDB operations
-# Concurrency Locks: Use RLock to allow reentrant lock acquisition within the same thread
+# Attempt to import DuckDB. Fall back to standard sqlite3 if DuckDB DLL load fails (e.g. AppControl policy)
+try:
+    import duckdb
+    HAS_DUCKDB = True
+except Exception as _duckdb_err:
+    import sqlite3
+    HAS_DUCKDB = False
+    logger.warning(f"DuckDB unavailable ({_duckdb_err}). Falling back to SQLite3 for persistence.")
+
+# Global reentrant thread locks for DB operations
 db_write_lock = threading.RLock()
 db_read_lock = threading.RLock()
 
@@ -30,25 +37,39 @@ def get_db_path() -> str:
             p = (ROOT_DIR / raw).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
         return str(p)
-    default_p = (DATA_DIR / "visualizer.duckdb").resolve()
+    ext = "duckdb" if HAS_DUCKDB else "sqlite3"
+    default_p = (DATA_DIR / f"visualizer.{ext}").resolve()
     default_p.parent.mkdir(parents=True, exist_ok=True)
     return str(default_p)
+
 _shared_conn = None
 
 def get_db_connection(read_only: bool = False):
-    """Returns a connection to DuckDB. Uses shared in-memory connection when DUCKDB_PATH == ':memory:'."""
+    """Returns a connection to DuckDB or SQLite3. Uses shared in-memory connection when DUCKDB_PATH == ':memory:'."""
     global _shared_conn
     db_path = get_db_path()
-    if db_path == ":memory:":
-        if _shared_conn is None:
-            _shared_conn = duckdb.connect(":memory:")
-        return _shared_conn
-    return duckdb.connect(db_path)
+    if HAS_DUCKDB:
+        if db_path == ":memory:":
+            if _shared_conn is None:
+                _shared_conn = duckdb.connect(":memory:")
+            return _shared_conn
+        return duckdb.connect(db_path)
+    else:
+        if db_path == ":memory:":
+            if _shared_conn is None:
+                _shared_conn = sqlite3.connect(":memory:", check_same_thread=False)
+            return _shared_conn
+        return sqlite3.connect(db_path, check_same_thread=False)
 
 def close_db_connection(conn):
-    """Closes DuckDB connection if not running in shared :memory: mode."""
+    """Closes DB connection (committing changes if SQLite3) if not running in shared :memory: mode."""
     if get_db_path() != ":memory:" and conn is not None:
         try:
+            if hasattr(conn, 'commit'):
+                try:
+                    conn.commit()
+                except Exception:
+                    pass
             conn.close()
         except Exception:
             pass
