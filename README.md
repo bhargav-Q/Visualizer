@@ -1,166 +1,123 @@
 # Visualizer
 
-> Enterprise-grade document ingestion and data visualization system powered by hybrid local RapidOCR and Llama-3.1 AI.
-
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.14+-3776AB?logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=black)](https://reactjs.org)
-[![Vite](https://img.shields.io/badge/Vite-6.0+-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
-[![Tests](https://img.shields.io/badge/Tests-27%2F27%20Passed-brightgreen.svg)](backend/tests)
+Visualizer extracts, structures, and visualizes documents (.pdf, .xlsx, .csv, .docx) using Mistral OCR for unstructured files, NVIDIA NIM for AI-generated dashboards, and a native pandas path for tabular data. Every chart and KPI links back to the source page range so outputs can be verified against the original document.
 
 ---
 
-## ✨ Features
+## 🚀 Quick Start Guide
 
-- **Multi-Format Document Ingestion**: Ingests `.xlsx`, `.csv`, `.pdf`, `.docx`, and `.txt` files up to 16MB without data truncation or schema lock.
-- **Parallel Multi-Page Spatial OCR**: `spatial_grid.py` processes multi-page PDF pages concurrently across `ThreadPoolExecutor` workers, cutting multi-page scanning latency to $<4.5\text{s}$.
-- **Zero-Loss Local Fallback Engine**: If remote AI endpoints experience rate limits (503) or timeouts, the engine automatically generates local executive summaries, term-frequency keyword rankings, and spatial table grids.
-- **Embedded DuckDB Storage & Caching**: Persists analytics payloads and metrics to an embedded DuckDB database (`data/app_data.duckdb`) for instant cache hits on repeated uploads.
-- **Pure Python Statistical Engine**: `tabular_processor.py` computes complete statistical summaries (`mean`, `median`, `std_dev`, `min`, `max`, null counts, categorical frequencies) without native C-extensions (`pandas`/`numpy`) for zero-dependency execution.
-- **Dynamic Processing Console**: Holographic 4-stage processing stepper UI (`Ingestion`, `OCR`, `Processing`, `Visualization`) featuring live stopwatch timers (`00:00.00`), scanning beam animations, and real-time backend telemetry ticker logs.
-- **One-Click JSON Export & Copy**: Includes instant `Export JSON` download and `Copy JSON` buttons in the dashboard header.
+### Prerequisites
+- **Python**: `v3.10+` (tested on `v3.14`)
+- **Node.js**: `v18.0+` & **npm**: `v9.0+`
 
----
-
-## 🏗️ System Architecture & 5-Phase Pipeline
-
-```mermaid
-graph TD
-    A[User Document Upload .pdf, .xlsx, .docx, .csv, .txt] --> B[Phase 1: Ingestion & Stream Triage]
-    B --> C[Phase 2: Parallel Spatial OCR & RapidOCR Scanning]
-    C -->|Native Text + RapidOCR TSV Grid| D[Phase 3: Data Cleaning & AI Normalization]
-    D -->|Llama-3.1-70B / Zero-Loss Local Fallback| E[Phase 4: Statistical Processing & DuckDB Caching]
-    E --> F[Phase 5: Interactive Glassmorphism UI & Dynamic Console]
-```
-
-### Model & API Routing Map
-
-| Model / Endpoint | Role & Purpose |
-|---|---|
-| `meta/llama-3.1-70b-instruct` | Generates executive document summaries, extracts keywords, and normalizes tabular data. |
-| `meta/llama-3.2-11b-vision-instruct` / `vision-parse` | Multi-modal vision engine & VLM parser for layout & table extraction on image and document payloads. |
-| `RapidOCR` + `parse_tsv_grid` | Zero-cost local ONNX engine and deterministic backstop parser guaranteeing 100% uptime if cloud APIs time out. |
-| `DuckDB` | Embedded OLAP database storing document metrics, key-value attributes, and cached analytics. |
-
----
-
-## 🛠️ Tech Stack
-
-### Backend
-- **Framework**: Python 3.14 + FastAPI + Uvicorn
-- **Parsers**: PyMuPDF (`fitz`), `python-docx`, `openpyxl`, `RapidOCR` ONNX runtime
-- **Storage**: DuckDB (`duckdb`) embedded database
-- **Testing**: `pytest` + `pytest-mock` + `httpx`
-
-### Frontend
-- **Framework**: React 18 + Vite
-- **Styling**: Vanilla CSS (Cyber-Purple Glassmorphism Design System)
-- **Icons & Charts**: Lucide Icons + Recharts
-
----
-
-## 🚀 Complete Local Setup & Quick Start Guide
-
----
-
-### 📋 1. System Prerequisites
-
-| Tool | Minimum Version | Recommended / Tested | Check Command |
-|---|---|---|---|
-| **Python** | `v3.10` | `v3.14+` | `python --version` |
-| **Node.js** | `v18.0.0` | `v20.0.0+` | `node -v` |
-| **npm** | `v9.0.0` | `v10.0.0+` | `npm -v` |
-| **Git** | `v2.30.0` | `v2.40.0+` | `git --version` |
-
----
-
-### 💻 2. Step-by-Step Installation
-
-#### Step A: Clone the Repository
+### 1. Setup Backend
 ```bash
-git clone https://github.com/bhargav-Q/Visualizer.git
-cd Visualizer
-```
+cd backend
+python -m venv venv
 
-#### Step B: Set Up Backend Virtual Environment
-```powershell
-# On Windows (PowerShell)
-python -m venv backend/venv
-.\backend\venv\Scripts\activate.ps1
+# Windows (PowerShell):
+.\venv\Scripts\activate.ps1
+# Mac/Linux:
+# source venv/bin/activate
 
-# Install requirements
-pip install -r backend/requirements.txt
-```
-
-#### Step C: Configure Environment Variables
-Copy `.env.example` to `.env`:
-```bash
+pip install -r requirements.txt
 cp .env.example .env
 ```
 
-`.env` Configuration:
-```ini
-# NVIDIA API Credentials (Optional - Cloud LLM Features)
-NVIDIA_API_KEY=your_nvidia_api_key_here
-
-# API & Storage Configuration
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-DUCKDB_PATH=data/app_data.duckdb
-
-# Model Selection
-TABLE_AI_MODEL=meta/llama-3.1-70b-instruct
-TEXT_AI_MODEL=meta/llama-3.1-70b-instruct
-NEMOTRON_OCR_URL=https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2
-```
-
-#### Step D: Install Frontend Dependencies
+### 2. Setup Frontend
 ```bash
 cd frontend
-cp .env.example .env
 npm install
-cd ..
+cp .env.example .env
+```
+
+### 3. Running Application Services
+* **Backend Service (FastAPI)**:
+  ```bash
+  cd backend
+  python -m uvicorn main:app --reload --port 8000
+  ```
+* **Frontend Application (React + Vite)**:
+  ```bash
+  cd frontend
+  npm run dev
+  ```
+
+---
+
+## 🔑 Required Environment Variables
+
+Configure these variable names in `backend/.env` (keys and values are kept private):
+
+| Variable Name | Description |
+|---|---|
+| `MISTRAL_API_KEY` | API key for Mistral OCR service (`mistral-ocr-latest`) |
+| `NVIDIA_API_KEY` | API key for NVIDIA NIM LLM endpoints (`deepseek-ai/deepseek-v4-flash`) |
+| `NVIDIA_NIM_BASE_URL` | Base URL endpoint for NVIDIA NIM API |
+| `TEXT_AI_MODEL` | OCR/text model identifier |
+| `TABLE_AI_MODEL` | Model identifier for tabular data extraction |
+| `MISTRAL_OCR_MODEL` | Official Mistral OCR model identifier (`mistral-ocr-latest`) |
+| `MAX_OCR_PAGES` | Maximum PDF page count limit for OCR scanning (default: `15`) |
+| `SPARSE_TEXT_THRESHOLD` | Character count threshold for sparse PDF native text detection (default: `150`) |
+| `OCR_DPI` | Target resolution DPI for PDF page rendering (default: `350`) |
+| `MIN_OCR_CONFIDENCE` | Minimum confidence score threshold for OCR token filtering (default: `0.50`) |
+| `DUCKDB_PATH` | Path to embedded DuckDB database file (default: `data/app_data.duckdb`) |
+| `ALLOWED_ORIGINS` | Comma-separated list of CORS allowed origins |
+| `HOST` | Backend server binding host IP (default: `0.0.0.0`) |
+| `PORT` | Backend server binding port (default: `8000`) |
+
+---
+
+## 🧪 Running Automated Tests
+
+Run the complete backend unit & integration test suite using `pytest`:
+
+```bash
+cd backend
+python -m pytest tests/
 ```
 
 ---
 
-### 🏃 3. Launching the Application Services
+## 📁 Project Structure
 
-Run the backend and frontend in two separate terminal windows:
-
-#### 📍 Terminal 1 — Backend Service (`FastAPI`):
-```bash
-cd backend
-.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
-```
-- **Backend API Base URL**: `http://localhost:8000`
-- **Interactive Swagger Docs**: `http://localhost:8000/docs`
-
-#### 📍 Terminal 2 — Frontend Application (`React + Vite`):
-```bash
-cd frontend
-npm run dev
-```
-- **Frontend Web Application URL**: `http://localhost:5173`
-
----
-
-### 🧪 4. Verifying System Health
-
-Run the complete automated backend test suite:
-
-```bash
-cd backend
-.\venv\Scripts\pytest.exe
-```
-
-**Expected Output:**
 ```text
-======================= 27 passed, 1 warning in 22.46s ========================
+Visualizer/
+├── backend/
+│   ├── main.py                # FastAPI entry point, upload validation, & CORS
+│   ├── config.py              # System configuration & env variable loaders
+│   ├── parsers/               # Parser engine & factory (.pdf, .xlsx, .csv, .docx)
+│   ├── processors/            # Text, keyword, and normalizer processors
+│   ├── services/              # Main pipeline, dashboard agent, Mistral OCR, & tabular service
+│   ├── engine/                # DuckDB persistence (db.py) & Pydantic models
+│   └── tests/                 # Automated pytest suite (20 tests)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx            # React root container & file state manager
+│   │   ├── components/        # Dashboard, ChartPanel, StatsCards, FileUpload
+│   │   └── utils/             # Allowed extensions (.pdf, .xlsx, .csv, .docx) & constants
+├── data/                      # Embedded DuckDB database & output storage
+├── README.md                  # Project setup documentation
+└── ARCHITECTURE.md            # Data flow & architecture notes
 ```
 
 ---
 
-## 📜 License
+## 🧠 Gotchas & Decisions Log
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+1. **Restricted File Types (.pdf, .xlsx, .csv, .docx)**:
+   * *Decision*: Plain text (`.txt`) and image formats (`.png`, `.jpg`) were removed to streamline the pipeline around structured tabular data and official Mistral PDF OCR scanning.
+2. **Dual-Branch Pipeline Architecture (`main_pipeline.py`)**:
+   * *Decision*: `.csv` and `.xlsx` bypass OCR entirely and run via native pandas (`process_tabular_file`) in $<0.5\text{s}$. Only `.pdf` and `.docx` route to Mistral OCR + DeepSeek.
+3. **Strict Pydantic JSON Schema Validation & Fallback Routing**:
+   * *Decision*: Added strict Pydantic validation (`DashboardSpecValidationSchema`) in `dashboard_agent.py`. If DeepSeek returns valid JSON syntax but invalid structures or non-numeric chart `y_data` (e.g. `["100", "N/A"]`), validation fails and safely routes execution to `generate_heuristic_fallback_dashboard_spec` to prevent downstream UI crashes.
+4. **Zero-Loss Local Fallback System**:
+   * *Decision*: If cloud AI endpoints time out or fail, local heuristic functions generate summaries and charts locally so the UI never crashes.
+5. **Context Window Capping (`MAX_INPUT_CONTEXT_LEN = 25000`)**:
+   * *Decision*: Input markdown is capped at 25k chars in `dashboard_agent.py` to prevent LLM context window overflows.
+6. **Responsive Recharts Label Interval Control**:
+   * *Decision*: Minimized cards auto-sample ticks (`interval="preserveStartEnd"`); expanded cards unhide 100% of field labels (`interval={0}`) with $-45^\circ$ rotation.
+7. **Custom Scrollable Pie Chart Legend**:
+   * *Decision*: Custom HTML flex container (`.pie-custom-legend-wrapper`) with scrollbars keeps 20+ legend categories strictly inside card borders.
+8. **Thread-Safe Embedded DuckDB Storage**:
+   * *Decision*: `db.py` uses `threading.RLock()` to prevent database file lock contention across async worker threads, with an automatic SQLite3 fallback.
