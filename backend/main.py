@@ -68,11 +68,11 @@ async def upload_file(file: UploadFile = File(...)):
     if file_size > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 16MB.")
 
-    supported_exts = [".xlsx", ".csv", ".pdf", ".docx", ".txt", ".png", ".jpg", ".jpeg", ".webp"]
+    supported_exts = [".xlsx", ".csv", ".pdf", ".docx"]
     if not any(filename.endswith(ext) for ext in supported_exts):
         raise HTTPException(
             status_code=400,
-            detail="Unsupported file type. Allowed formats: .xlsx, .csv, .pdf, .docx, .txt, .png, .jpg, .jpeg, .webp"
+            detail="Unsupported file type. Allowed formats: .xlsx, .csv, .pdf, .docx"
         )
 
     file_hash = hashlib.sha256(file_bytes).hexdigest()

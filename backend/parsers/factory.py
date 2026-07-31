@@ -5,7 +5,6 @@ from parsers.registry import ParserRegistry, get_global_parser_registry
 from parsers.csv_adapter import CSVParser
 from parsers.xlsx_adapter import XLSXParser
 # from parsers.xls_adapter import XLSParser
-from parsers.txt_adapter import TXTParser
 from parsers.docx_adapter import DOCXParser
 from parsers.pdf_adapter import PDFParser
 from utils.file_detector import FileDetector
@@ -24,7 +23,6 @@ class ParserFactory:
         if not self.registry.get_supported_extensions():
             self.registry.register_parser(CSVParser())
             self.registry.register_parser(XLSXParser())
-            self.registry.register_parser(TXTParser())
             self.registry.register_parser(DOCXParser())
             self.registry.register_parser(PDFParser())
 

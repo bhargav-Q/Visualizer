@@ -90,12 +90,6 @@ def extract_tables_from_text(raw_text: str) -> dict | None:
 
     # Step 1: Check deterministic TSV backstop (Patch C)
     deterministic_table = parse_tsv_grid(raw_text)
-
-    from openai import OpenAI
-
-    from engine.vision_client import is_vision_api_disabled, disable_vision_api
-
-    # NVIDIA API temporarily bypassed for pure Mistral OCR testing phase
     return deterministic_table
 
     try:
