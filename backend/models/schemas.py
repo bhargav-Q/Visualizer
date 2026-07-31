@@ -26,6 +26,7 @@ class ChartData(BaseModel):
     x_key: str
     y_key: str
     data: List[Dict[str, Any]]
+    page_range: Optional[str] = None
 
 class SheetData(BaseModel):
     """Per-worksheet analysis data for multi-sheet Excel workbooks."""

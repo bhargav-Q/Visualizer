@@ -25,7 +25,7 @@ def generate_dashboard_spec_from_markdown(markdown_text: str) -> dict:
 
     system_prompt = """
     You are an expert Data Visualization Architect.
-    Analyze the provided document markdown (including its embedded tables, equations, and key facts) 
+    Analyze the provided document markdown (including its embedded tables, equations, key facts, and ## Page X headings) 
     and synthesize a structured dashboard specification.
 
     Output STRICTLY a valid JSON object matching this schema:
@@ -33,7 +33,19 @@ def generate_dashboard_spec_from_markdown(markdown_text: str) -> dict:
       "dashboard_title": "Descriptive Document Title",
       "executive_summary": "2-3 sentence overview of core findings and key highlights",
       "kpis": [
-        {"label": "Metric Name", "value": "Formatted Value (e.g. $4.2M, 904 Words, 12 Pages, 15%)"}
+        {
+          "label": "Metric Name",
+          "value": "Formatted Value (e.g. $4.2M, 904 Words, 12 Pages, 15%)",
+          "page_range": "Page 1 or Pages 1, 23"
+        }
+      ],
+      "key_value_pairs": [
+        {
+          "key_name": "Attribute Name (e.g. Effective Date, Applicant Name, FEIN Number)",
+          "value": "Attribute Value (e.g. 10/04/2025, Surf Packing Inc., 81-2831387)",
+          "page_number": 1,
+          "context_snippet": "Context snippet from text"
+        }
       ],
       "keywords": [
         {"word": "PrimaryKeyword", "score": 0.95},
@@ -46,12 +58,15 @@ def generate_dashboard_spec_from_markdown(markdown_text: str) -> dict:
           "x_axis_label": "Category Label",
           "y_axis_label": "Value Label",
           "x_data": ["Category 1", "Category 2"],
-          "y_data": [100, 200]
+          "y_data": [100, 200],
+          "page_range": "Page 1 or Pages 1-3"
         }
       ]
     }
     Rules:
     - Extract real quantitative values from tables and text.
+    - Extract 10 to 25 key domain attributes/facts into key_value_pairs (e.g. Effective Date, FEIN, Address, Producer, Carrier, Industry, Safety Programs, Wages).
+    - For each KPI and Chart, identify the exact source page number or page range (e.g. "Page 1", "Pages 1, 23", "Page 22") based on the document headings like "## Page X" or document section structure.
     - Extract 10-15 dominant domain keywords with relevance scores from 0.40 to 0.98.
     - If numbers exist in tables, construct at least 1-2 visual charts (bar, line, or pie).
     - Ensure x_data and y_data arrays match in length and contain numbers in y_data.
@@ -84,24 +99,86 @@ def generate_dashboard_spec_from_markdown(markdown_text: str) -> dict:
             parsed_spec["keywords"] = extract_local_keywords(markdown_text)
         if not parsed_spec.get("charts"):
             parsed_spec["charts"] = extract_charts_from_markdown_tables(markdown_text)
+        if not parsed_spec.get("key_value_pairs"):
+            parsed_spec["key_value_pairs"] = extract_local_key_value_pairs(markdown_text)
         return parsed_spec
 
     except Exception as exc:
         logger.error(f"Error calling NVIDIA DeepSeek-V4-Flash model: {exc}")
         return generate_heuristic_fallback_dashboard_spec(markdown_text)
 
+def extract_local_key_value_pairs(markdown_text: str, max_pairs: int = 20) -> list:
+    """
+    Parses key-value pairs (Key: Value or | Key | Value |) from Markdown text with page numbers.
+    """
+    kv_list = []
+    lines = markdown_text.split("\n")
+    current_page = 1
+
+    for line in lines:
+        page_match = re.search(r"##\s*Page\s*(\d+)", line, re.IGNORECASE)
+        if page_match:
+            try:
+                current_page = int(page_match.group(1))
+            except ValueError:
+                pass
+            continue
+
+        clean_line = line.strip()
+        if not clean_line or clean_line.startswith("#") or clean_line.startswith("```"):
+            continue
+
+        # Check for Key: Value format
+        if ":" in clean_line and not clean_line.startswith("|") and not clean_line.startswith(">"):
+            parts = clean_line.split(":", 1)
+            k_name = re.sub(r"[^\w\s-]", "", parts[0]).strip()
+            v_val = parts[1].strip()
+            if k_name and v_val and 3 <= len(k_name) <= 40 and 1 <= len(v_val) <= 120:
+                if not any(stop in k_name.lower() for stop in ["http", "https", "image", "page", "header", "footer", "table"]):
+                    kv_list.append({
+                        "key_name": k_name,
+                        "value": v_val,
+                        "context_snippet": clean_line[:150],
+                        "page_number": current_page
+                    })
+
+        # Check for 2-column Markdown tables (| Key | Value |)
+        elif clean_line.startswith("|") and clean_line.count("|") == 3:
+            cells = [c.strip() for c in clean_line.strip("|").split("|")]
+            if len(cells) == 2 and cells[0] and cells[1] and not cells[0].startswith("-"):
+                k_name = re.sub(r"[^\w\s-]", "", cells[0]).strip()
+                v_val = cells[1].strip()
+                if k_name and v_val and 3 <= len(k_name) <= 40 and 1 <= len(v_val) <= 120:
+                    if k_name.lower() not in ["key", "attribute", "field", "name", "parameter"]:
+                        kv_list.append({
+                            "key_name": k_name,
+                            "value": v_val,
+                            "context_snippet": f"{k_name}: {v_val}",
+                            "page_number": current_page
+                        })
+
+        if len(kv_list) >= max_pairs:
+            break
+
+    return kv_list[:max_pairs]
+
 def extract_charts_from_markdown_tables(markdown_text: str) -> list:
     """
-    Parses Markdown grid tables (| Col 1 | Col 2 |) and converts numerical columns into visual chart objects.
+    Parses Markdown grid tables (| Col 1 | Col 2 |) and converts numerical columns into visual chart objects with page tracking.
     """
     charts = []
     lines = markdown_text.split("\n")
     table_blocks = []
     current_table = []
+    current_page = "1"
 
     for line in lines:
+        page_match = re.search(r"##\s*Page\s*(\d+)", line, re.IGNORECASE)
+        if page_match:
+            current_page = page_match.group(1)
+
         if "|" in line and not line.strip().startswith(">"):
-            current_table.append(line.strip())
+            current_table.append((line.strip(), f"Page {current_page}"))
         else:
             if len(current_table) >= 3:
                 table_blocks.append(current_table)
@@ -112,12 +189,16 @@ def extract_charts_from_markdown_tables(markdown_text: str) -> list:
 
     for idx, block in enumerate(table_blocks):
         try:
-            headers = [c.strip() for c in block[0].strip("|").split("|")]
+            raw_lines = [item[0] for item in block]
+            page_tags = list(dict.fromkeys([item[1] for item in block]))
+            page_range_str = ", ".join(page_tags) if page_tags else "Page 1"
+
+            headers = [c.strip() for c in raw_lines[0].strip("|").split("|")]
             if len(headers) < 2:
                 continue
 
             data_rows = []
-            for row_line in block[2:]:
+            for row_line in raw_lines[2:]:
                 if ":" in row_line and "-" in row_line:
                     continue  # Separator line
                 cells = [c.strip() for c in row_line.strip("|").split("|")]
@@ -153,7 +234,8 @@ def extract_charts_from_markdown_tables(markdown_text: str) -> list:
                     "x_axis_label": headers[x_col_idx],
                     "y_axis_label": headers[y_col_idx],
                     "x_data": x_data,
-                    "y_data": y_data
+                    "y_data": y_data,
+                    "page_range": page_range_str
                 })
         except Exception as e:
             logger.debug(f"Could not parse table block {idx} into chart: {e}")
@@ -188,9 +270,10 @@ def generate_heuristic_fallback_dashboard_spec(markdown_text: str) -> dict:
         "dashboard_title": first_title,
         "executive_summary": f"Document analyzed successfully ({word_count} words processed).",
         "kpis": [
-            {"label": "Total Words", "value": f"{word_count:,}"},
-            {"label": "Status", "value": "Extracted"}
+            {"label": "Total Words", "value": f"{word_count:,}", "page_range": "Page 1"},
+            {"label": "Status", "value": "Extracted", "page_range": "Page 1"}
         ],
+        "key_value_pairs": extract_local_key_value_pairs(markdown_text),
         "keywords": extract_local_keywords(markdown_text),
         "charts": extract_charts_from_markdown_tables(markdown_text)
     }

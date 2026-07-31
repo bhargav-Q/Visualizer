@@ -54,6 +54,8 @@ def run_file_to_dashboard_pipeline(
         dashboard_spec = generate_dashboard_spec_from_markdown(resolved_markdown)
 
         keywords_list = dashboard_spec.get("keywords", [])
+        kv_list = dashboard_spec.get("key_value_pairs", [])
+
         return {
             "status": "success",
             "source_type": "unstructured",
@@ -65,6 +67,14 @@ def run_file_to_dashboard_pipeline(
             "kpis": dashboard_spec.get("kpis", []),
             "keywords": keywords_list,
             "charts": dashboard_spec.get("charts", []),
+            "key_value_pairs": kv_list,
+            "analytics": {
+                "document_title": dashboard_spec.get("dashboard_title", filename),
+                "summary": dashboard_spec.get("executive_summary", ""),
+                "keywords": keywords_list,
+                "key_value_pairs": kv_list,
+                "tables": []
+            },
             "raw_markdown": resolved_markdown,
             "page_count": ocr_result.get("page_count", 1),
             "text": {
